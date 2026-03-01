@@ -32,6 +32,21 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ logs, selectedDate, 
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
+  const averageScore = React.useMemo(() => {
+    const scores = Object.values(logs).map(dayLog => {
+      let s = 0;
+      Object.values(dayLog).forEach(cat => {
+        Object.values(cat).forEach(sub => {
+          s += LEVEL_XP[sub.achieved];
+        });
+      });
+      return s;
+    }).filter(s => s > 0);
+    
+    if (scores.length === 0) return 10;
+    return scores.reduce((a, b) => a + b, 0) / scores.length;
+  }, [logs]);
+
   const getDayScore = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const dayLog = logs[dateStr];
@@ -40,17 +55,35 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ logs, selectedDate, 
     let score = 0;
     Object.values(dayLog).forEach(cat => {
       Object.values(cat).forEach(sub => {
-        score += LEVEL_XP[sub.achieved] * sub.score;
+        score += LEVEL_XP[sub.achieved];
       });
     });
     return score;
   };
 
-  const getDayColor = (score: number) => {
-    if (score === 0) return 'text-slate-700';
-    if (score < 10) return 'text-emerald-400';
-    if (score < 30) return 'text-emerald-600';
-    return 'text-emerald-800 font-black';
+  const getDayColor = (score: number, avg: number) => {
+    if (score === 0) return 'text-slate-300';
+    if (score < avg) {
+      const ratio = score / avg;
+      if (ratio < 0.5) return 'text-blue-700 font-bold';
+      return 'text-blue-400';
+    }
+    if (score < avg * 2.5) {
+      const ratio = (score - avg) / (avg * 1.5);
+      if (ratio > 0.7) return 'text-emerald-800 font-black';
+      if (ratio > 0.3) return 'text-emerald-600 font-bold';
+      return 'text-emerald-400';
+    }
+    return 'text-rose-500 font-black scale-110';
+  };
+
+  const getAnimal = (score: number, avg: number) => {
+    if (score === 0) return null;
+    if (score < avg * 0.5) return '🐛';
+    if (score < avg) return '🐢';
+    if (score < avg * 1.5) return '🐰';
+    if (score < avg * 2.5) return '🐯';
+    return '🐲';
   };
 
   return (
@@ -79,27 +112,24 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ logs, selectedDate, 
           const isSelected = isSameDay(day, selectedDate);
           const isCurrentMonth = isSameMonth(day, monthStart);
 
-          return (
-            <button
-              key={i}
-              onClick={() => onDateSelect(day)}
-              className={cn(
-                "aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all",
-                !isCurrentMonth && "opacity-20",
-                isSelected ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200" : "hover:bg-slate-50"
-              )}
-            >
-              <span className={cn("text-xs font-bold", isSelected ? "text-white" : getDayColor(score))}>
-                {format(day, 'd')}
-              </span>
-              {score > 0 && !isSelected && (
-                <div className={cn(
-                  "w-1 h-1 rounded-full mt-1",
-                  score >= 30 ? "bg-emerald-800" : score >= 10 ? "bg-emerald-600" : "bg-emerald-400"
-                )} />
-              )}
-            </button>
-          );
+            return (
+              <button
+                key={i}
+                onClick={() => onDateSelect(day)}
+                className={cn(
+                  "aspect-square rounded-xl flex flex-col items-center justify-center relative transition-all",
+                  !isCurrentMonth && "opacity-20",
+                  isSelected ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200" : "hover:bg-slate-50"
+                )}
+              >
+                <span className={cn("text-xs font-bold", isSelected ? "text-white" : getDayColor(score, averageScore))}>
+                  {format(day, 'd')}
+                </span>
+                {score > 0 && !isSelected && (
+                  <span className="text-[10px] mt-0.5">{getAnimal(score, averageScore)}</span>
+                )}
+              </button>
+            );
         })}
       </div>
     </div>

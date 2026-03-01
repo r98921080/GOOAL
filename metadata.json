@@ -1,5 +1,6 @@
 {
-  "name": "彈性目標追蹤",
-  "description": "A flexible habit tracker using a 6-3-3 system (6 categories, 3 sub-items each) with Mini/Advanced/Elite levels and RPG-style growth.",
-  "requestFramePermissions": []
+  "name": "一起轉大人",
+  "description": "A flexible habit tracker using a 6-3-3 system (6 categories, 3 sub-items each) with Mini/Advanced/Elite levels and AI-powered growth coaching.",
+  "Overwrite": true,
+  "TargetFile": "/metadata.json"
 }

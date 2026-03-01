@@ -18,7 +18,6 @@ export interface Category {
 
 export interface DailyLogEntry {
   achieved: Level;
-  score: number; // 1-5 stars
   note?: string;
 }
 
@@ -44,6 +43,21 @@ export interface UserProfile {
   achievements: Achievement[];
 }
 
+export interface DailyChallenge {
+  id: string;
+  title: string;
+  description: string;
+  points: number;
+  completed: boolean;
+  type: 'social' | 'efficacy' | 'habit' | 'other';
+}
+
+export interface FunFact {
+  id: string;
+  content: string;
+  category: string;
+}
+
 export interface AppState {
   profile: UserProfile;
   categories: Category[];
@@ -56,5 +70,11 @@ export interface AppState {
   rewards: {
     points: number;
     unlockedItems: string[];
+  };
+  dailyChallenges: {
+    [date: string]: DailyChallenge[];
+  };
+  funFacts: {
+    [date: string]: FunFact[];
   };
 }

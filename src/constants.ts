@@ -58,6 +58,8 @@ export const INITIAL_STATE: AppState = {
     points: 0,
     unlockedItems: [],
   },
+  dailyChallenges: {},
+  funFacts: {},
 };
 
 export const LEVEL_XP: Record<Level, number> = {

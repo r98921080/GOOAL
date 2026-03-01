@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Star, ChevronRight, CheckCircle2, Trash2, Edit3, Save, X as CloseIcon } from 'lucide-react';
+import { ChevronRight, CheckCircle2, Trash2, Edit3, Save, X as CloseIcon } from 'lucide-react';
 import { Category, DailyLog, Level, SubItem } from '../types';
 import { cn } from '../lib/utils';
 
 interface CategoryCardProps {
   category: Category;
   logs: DailyLog;
-  onLog: (subId: string, level: Level, score: number, note?: string) => void;
+  onLog: (subId: string, level: Level, note?: string) => void;
   onResetLog: (subId: string) => void;
   onDelete: () => void;
   onEdit: (updatedCategory: Category) => void;
@@ -28,7 +28,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(category.title);
   const [editSubItems, setEditSubItems] = useState(category.subItems);
-  const [tempScore, setTempScore] = useState(5);
   const [note, setNote] = useState('');
 
   const catLogs = logs[category.id] || {};
@@ -251,7 +250,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
                   <button
                     key={level}
                     onClick={() => {
-                      onLog(selectedSub.id, level, tempScore, note);
+                      onLog(selectedSub.id, level, note);
                       setSelectedSub(null);
                       setNote('');
                     }}
@@ -261,24 +260,6 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
                     <span className="text-xs text-slate-400 mt-1">{selectedSub.levels[level]}</span>
                   </button>
                 ))}
-              </div>
-
-              <div className="mb-8">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-sm font-bold text-slate-600 uppercase tracking-widest">評分質量</span>
-                  <div className="flex items-center gap-1">
-                    <Star className="text-amber-400 fill-amber-400" size={16} />
-                    <span className="font-bold text-slate-800">{tempScore}</span>
-                  </div>
-                </div>
-                <input 
-                  type="range" 
-                  min="1" 
-                  max="5" 
-                  value={tempScore}
-                  onChange={(e) => setTempScore(parseInt(e.target.value))}
-                  className="w-full h-2 bg-slate-100 rounded-lg appearance-none cursor-pointer accent-emerald-500"
-                />
               </div>
 
               <button

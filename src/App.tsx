@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { format, isSameDay } from 'date-fns';
+import { format } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Trophy, 
@@ -17,16 +17,16 @@ import {
   Zap,
   Calendar as CalendarIcon
 } from 'lucide-react';
-import { Category, DailyLog, Level, AppState } from './types';
+import { Category, DailyLog, Level, AppState, DailyChallenge, SubItem } from './types';
 import { INITIAL_STATE, LEVEL_XP, ACHIEVEMENTS } from './constants';
 import { CategoryCard } from './components/CategoryCard';
 import { LogsView } from './components/LogsView';
 import { ExploreView } from './components/ExploreView';
 import { SettingsView } from './components/SettingsView';
 import { CalendarView } from './components/CalendarView';
-import { generateWeeklySummary, parseNLPSetup } from './services/geminiService';
+import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts } from './services/geminiService';
 import { cn } from './lib/utils';
-import { differenceInDays, startOfDay } from 'date-fns';
+import { differenceInDays, startOfDay, isSameDay } from 'date-fns';
 
 type Tab = 'dashboard' | 'explore' | 'logs' | 'settings';
 
@@ -47,16 +47,25 @@ export default function App() {
           achievements: parsed.profile?.achievements || []
         },
         dailyNotes: parsed.dailyNotes || {},
-        rewards: parsed.rewards || { points: 0, unlockedItems: [] }
+        rewards: parsed.rewards || { points: 0, unlockedItems: [] },
+        dailyChallenges: parsed.dailyChallenges || {},
+        funFacts: parsed.funFacts || {},
       };
     }
     return { ...INITIAL_STATE, dailyNotes: {} };
   });
 
   const [isSetupOpen, setIsSetupOpen] = useState(false);
+  const [setupStep, setSetupStep] = useState(0); // 0: closed, 1: title, 2: subitem selection, 3: ask to continue
+  const [setupData, setSetupData] = useState<{ title: string; subItems: SubItem[] }>({ title: '', subItems: [] });
+  const [aiSuggestions, setAiSuggestions] = useState<string[]>([]);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [isGeneratingGoals, setIsGeneratingGoals] = useState(false);
   const [nlpInput, setNlpInput] = useState('');
   const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [isGeneratingChallenges, setIsGeneratingChallenges] = useState(false);
+  const [isGeneratingFunFacts, setIsGeneratingFunFacts] = useState(false);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const currentDateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -113,6 +122,60 @@ export default function App() {
     syncToCloud(state);
   }, [state, user]);
 
+  // Daily Challenges Generation
+  useEffect(() => {
+    if (!state.dailyChallenges[today] && state.categories.length > 0 && !isGeneratingChallenges) {
+      const generate = async () => {
+        setIsGeneratingChallenges(true);
+        const challenges = await getDailyChallenges(state.logs, state.categories, state.dailyNotes);
+        if (challenges.length > 0) {
+          setState(prev => ({
+            ...prev,
+            dailyChallenges: { ...prev.dailyChallenges, [today]: challenges }
+          }));
+        }
+        setIsGeneratingChallenges(false);
+      };
+      generate();
+    }
+  }, [state.categories, today]);
+
+  // Fun Facts Generation
+  useEffect(() => {
+    if (!state.funFacts[today] && !isGeneratingFunFacts) {
+      const generate = async () => {
+        setIsGeneratingFunFacts(true);
+        const facts = await getFunFacts();
+        if (facts.length > 0) {
+          setState(prev => ({
+            ...prev,
+            funFacts: { ...prev.funFacts, [today]: facts }
+          }));
+        }
+        setIsGeneratingFunFacts(false);
+      };
+      generate();
+    }
+  }, [today]);
+
+  const handleCompleteChallenge = (challengeId: string) => {
+    setState(prev => {
+      const challenges = prev.dailyChallenges[today] || [];
+      const challenge = challenges.find(c => c.id === challengeId);
+      if (!challenge || challenge.completed) return prev;
+
+      const newChallenges = challenges.map(c => 
+        c.id === challengeId ? { ...c, completed: true } : c
+      );
+
+      return {
+        ...prev,
+        rewards: { ...prev.rewards, points: prev.rewards.points + challenge.points },
+        dailyChallenges: { ...prev.dailyChallenges, [today]: newChallenges }
+      };
+    });
+  };
+
   const checkAchievements = (newState: AppState) => {
     const unlockedIds = new Set(newState.profile.achievements.map(a => a.id));
     const newAchievements = [...newState.profile.achievements];
@@ -160,7 +223,7 @@ export default function App() {
     return newState;
   };
 
-  const handleLog = (catId: string, subId: string, level: Level, score: number, note?: string) => {
+  const handleLog = (catId: string, subId: string, level: Level, note?: string) => {
     if (!isEditable) {
       alert('只能補登或修改 7 日內的紀錄');
       return;
@@ -168,10 +231,10 @@ export default function App() {
     setState(prev => {
       const oldEntry = prev.logs[currentDateStr]?.[catId]?.[subId];
       
-      let xpGained = LEVEL_XP[level] * score;
+      let xpGained = LEVEL_XP[level];
       let pointsGained = LEVEL_XP[level];
       if (oldEntry) {
-        xpGained -= LEVEL_XP[oldEntry.achieved] * oldEntry.score;
+        xpGained -= LEVEL_XP[oldEntry.achieved];
         pointsGained -= LEVEL_XP[oldEntry.achieved];
       }
 
@@ -190,7 +253,7 @@ export default function App() {
             ...(prev.logs[currentDateStr] || {}),
             [catId]: {
               ...(prev.logs[currentDateStr]?.[catId] || {}),
-              [subId]: { achieved: level, score, note }
+              [subId]: { achieved: level, note }
             }
           }
         }
@@ -228,7 +291,7 @@ export default function App() {
         newLogs[currentDateStr] = newDayLogs;
       }
 
-      const xpLost = LEVEL_XP[oldEntry.achieved] * oldEntry.score;
+      const xpLost = LEVEL_XP[oldEntry.achieved];
       const pointsLost = LEVEL_XP[oldEntry.achieved];
       const newTotalXp = Math.max(0, prev.profile.totalXp - xpLost);
       const newLevel = Math.floor(newTotalXp / 100) + 1;
@@ -254,9 +317,9 @@ export default function App() {
   };
 
   const handleAddCategory = (custom?: Partial<Category>) => {
-    const parsed = custom || parseNLPSetup(nlpInput);
-    if (!parsed) {
-      alert('請使用格式：類別：項目1, 項目2, 項目3');
+    const parsed = custom || (setupData.title ? setupData : parseNLPSetup(nlpInput));
+    if (!parsed || !parsed.title) {
+      alert('請輸入大項目名稱');
       return;
     }
     if (state.categories.length >= 6) {
@@ -270,6 +333,38 @@ export default function App() {
     }));
     setNlpInput('');
     setIsSetupOpen(false);
+    setSetupStep(0);
+    setSetupData({ title: '', subItems: [] });
+  };
+
+  const startSetup = () => {
+    setIsSetupOpen(true);
+    setSetupStep(1);
+    setSetupData({ title: '', subItems: [] });
+  };
+
+  const nextSetupStep = async (subName: string) => {
+    setIsGeneratingGoals(true);
+    const goals = await getSubItemGoals(setupData.title, subName);
+    setIsGeneratingGoals(false);
+
+    const newSub: SubItem = {
+      id: `sub_${Date.now()}`,
+      name: subName,
+      levels: goals
+    };
+    
+    const updatedSubItems = [...setupData.subItems, newSub];
+    setSetupData(prev => ({ ...prev, subItems: updatedSubItems }));
+    setSetupStep(3); // Go to "Ask to continue"
+  };
+
+  const prepareNextSubItem = async () => {
+    setSetupStep(2);
+    setIsSuggesting(true);
+    const suggestions = await getSubItemSuggestions(setupData.title, setupData.subItems.map(s => s.name));
+    setAiSuggestions(suggestions);
+    setIsSuggesting(false);
   };
 
   const handleDeleteCategory = (id: string) => {
@@ -300,7 +395,15 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'explore':
-        return <ExploreView onImport={(cats) => cats.forEach(c => handleAddCategory(c))} profile={state.profile} rewards={state.rewards} />;
+        return (
+          <ExploreView 
+            onImport={(cats) => cats.forEach(c => handleAddCategory(c))} 
+            profile={state.profile} 
+            rewards={state.rewards} 
+            dailyChallenges={state.dailyChallenges[today] || []}
+            onCompleteChallenge={handleCompleteChallenge}
+          />
+        );
       case 'logs':
         return <LogsView state={state} onUpdateNote={handleUpdateDailyNote} />;
       case 'settings':
@@ -359,15 +462,17 @@ export default function App() {
                   <motion.div
                     initial={{ opacity: 0, y: -10 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mt-3 p-5 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-sm leading-relaxed italic"
+                    className="mt-3 p-6 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-lg leading-relaxed italic font-['Microsoft_JhengHei','PingFang_TC','Heiti_TC',sans-serif]"
                   >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="font-bold uppercase text-[10px] tracking-widest text-indigo-400">Coach Gemini</span>
+                    <div className="flex justify-between items-start mb-3">
+                      <span className="font-bold uppercase text-xs tracking-widest text-indigo-400">Coach Gemini</span>
                       <button onClick={() => setAiSummary(null)} className="text-indigo-300 hover:text-indigo-500">
-                        <X size={14} />
+                        <X size={16} />
                       </button>
                     </div>
-                    {aiSummary}
+                    <div className="whitespace-pre-line">
+                      {aiSummary}
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -381,7 +486,7 @@ export default function App() {
                   key={cat.id} 
                   category={cat} 
                   logs={todayLogs} 
-                  onLog={(subId, level, score, note) => handleLog(cat.id, subId, level, score, note)}
+                  onLog={(subId, level, note) => handleLog(cat.id, subId, level, note)}
                   onResetLog={(subId) => handleResetLog(cat.id, subId)}
                   onDelete={() => handleDeleteCategory(cat.id)}
                   onEdit={handleEditCategory}
@@ -391,7 +496,7 @@ export default function App() {
               
               {state.categories.length < 6 && (
                 <button 
-                  onClick={() => setIsSetupOpen(true)}
+                  onClick={startSetup}
                   className="w-full py-6 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 flex flex-col items-center gap-2 hover:border-emerald-300 hover:text-emerald-500 transition-all"
                 >
                   <Plus size={24} />
@@ -413,7 +518,7 @@ export default function App() {
             <Trophy size={20} />
           </div>
           <div>
-            <h1 className="font-black text-xl tracking-tight text-slate-800">FLEX PROGRESS</h1>
+            <h1 className="font-black text-xl tracking-tight text-slate-800">一起轉大人</h1>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">LV.{state.profile.level}</span>
               <div className="w-20 h-1 bg-slate-100 rounded-full overflow-hidden">
@@ -454,42 +559,100 @@ export default function App() {
               className="w-full max-w-md bg-white rounded-[40px] p-8 shadow-2xl"
             >
               <div className="flex justify-between items-center mb-8">
-                <h2 className="text-2xl font-black text-slate-800">智慧設定</h2>
+                <h2 className="text-2xl font-black text-slate-800">
+                  {setupStep === 1 ? '設定大項目' : `子項目 ${setupStep - 1}`}
+                </h2>
                 <button onClick={() => setIsSetupOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400">
                   <X size={20} />
                 </button>
               </div>
 
               <div className="space-y-6">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">NLP 快速建立</label>
-                  <textarea 
-                    value={nlpInput}
-                    onChange={(e) => setNlpInput(e.target.value)}
-                    placeholder="例如：健身：跑步, 懸吊, 波比"
-                    className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl focus:border-emerald-500 focus:bg-white transition-all outline-none text-slate-700 font-medium h-32 resize-none"
-                  />
-                  <p className="mt-2 text-[10px] text-slate-400 italic">格式：類別：項目1, 項目2, 項目3</p>
-                </div>
+                {setupStep === 1 ? (
+                  <div className="space-y-4">
+                    <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest">請輸入大項目名稱</label>
+                    <input 
+                      type="text"
+                      value={setupData.title}
+                      onChange={(e) => setSetupData(prev => ({ ...prev, title: e.target.value }))}
+                      placeholder="例如：健身、學習、社交..."
+                      className="w-full p-5 bg-slate-50 border-2 border-slate-100 rounded-3xl focus:border-emerald-500 focus:bg-white transition-all outline-none text-slate-700 font-bold text-lg"
+                    />
+                    <button 
+                      onClick={prepareNextSubItem}
+                      className="w-full py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200"
+                    >
+                      下一步
+                    </button>
+                  </div>
+                ) : setupStep === 2 ? (
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-2 rounded-xl w-fit">
+                      <Sparkles size={14} />
+                      <span className="text-[10px] font-bold uppercase">AI 智慧建議子項目</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 gap-3">
+                      {isSuggesting || isGeneratingGoals ? (
+                        [1, 2, 3].map(i => (
+                          <div key={i} className="h-14 bg-slate-50 animate-pulse rounded-2xl" />
+                        ))
+                      ) : (
+                        aiSuggestions.map((suggestion, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => nextSetupStep(suggestion)}
+                            className="w-full p-4 bg-white border-2 border-slate-100 rounded-2xl text-left font-bold text-slate-700 hover:border-emerald-500 hover:bg-emerald-50 transition-all"
+                          >
+                            {suggestion}
+                          </button>
+                        ))
+                      )}
+                    </div>
 
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => handleAddCategory()}
-                    className="flex-1 py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-colors"
-                  >
-                    建立結構
-                  </button>
-                  <button 
-                    onClick={() => {
-                      const shareUrl = `${window.location.origin}?template=${btoa(JSON.stringify(state.categories))}`;
-                      navigator.clipboard.writeText(shareUrl);
-                      alert('模板連結已複製！');
-                    }}
-                    className="p-4 bg-slate-100 text-slate-600 rounded-2xl hover:bg-slate-200 transition-colors"
-                  >
-                    <Share2 size={20} />
-                  </button>
-                </div>
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
+                      <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-300 font-bold">或</span></div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input 
+                        type="text"
+                        placeholder="手動輸入子項目..."
+                        className="flex-1 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none focus:border-emerald-500"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            nextSetupStep(e.currentTarget.value);
+                            e.currentTarget.value = '';
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-6 text-center">
+                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Plus size={32} />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-800">已新增子項目！</h3>
+                    <p className="text-slate-500 text-sm">AI 已為您自動訂定 Mini/Advanced/Elite 目標，您之後可以隨時修改。</p>
+                    
+                    <div className="flex flex-col gap-3 pt-4">
+                      <button 
+                        onClick={prepareNextSubItem}
+                        className="w-full py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200"
+                      >
+                        繼續新增子項目
+                      </button>
+                      <button 
+                        onClick={() => handleAddCategory()}
+                        className="w-full py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl"
+                      >
+                        完成設定
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

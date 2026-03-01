@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { Compass, Copy, ExternalLink, Zap, Sparkles } from 'lucide-react';
-import { Category } from '../types';
+import { Category, DailyChallenge } from '../types';
 import { ACHIEVEMENTS } from '../constants';
 import { cn } from '../lib/utils';
 
@@ -30,9 +30,11 @@ interface ExploreViewProps {
   onImport: (categories: any[]) => void;
   profile: any;
   rewards: any;
+  dailyChallenges: DailyChallenge[];
+  onCompleteChallenge: (id: string) => void;
 }
 
-export const ExploreView: React.FC<ExploreViewProps> = ({ onImport, profile, rewards }) => {
+export const ExploreView: React.FC<ExploreViewProps> = ({ onImport, profile, rewards, dailyChallenges, onCompleteChallenge }) => {
   const unlockedIds = new Set(profile.achievements.map((a: any) => a.id));
 
   return (
@@ -79,6 +81,44 @@ export const ExploreView: React.FC<ExploreViewProps> = ({ onImport, profile, rew
           })}
         </div>
       </section>
+
+      {/* Daily Challenges Section */}
+      {dailyChallenges.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles className="text-amber-500" size={20} />
+            <h2 className="text-lg font-black text-slate-800">今日小挑戰</h2>
+          </div>
+          <div className="space-y-3">
+            {dailyChallenges.map(challenge => (
+              <button
+                key={challenge.id}
+                onClick={() => onCompleteChallenge(challenge.id)}
+                disabled={challenge.completed}
+                className={cn(
+                  "w-full p-4 rounded-2xl border transition-all flex items-center justify-between text-left",
+                  challenge.completed 
+                    ? "bg-slate-50 border-slate-100 opacity-60" 
+                    : "bg-white border-slate-100 hover:border-emerald-200 shadow-sm"
+                )}
+              >
+                <div className="flex-1">
+                  <h4 className={cn("font-bold text-sm", challenge.completed ? "text-slate-400 line-through" : "text-slate-700")}>
+                    {challenge.title}
+                  </h4>
+                  <p className="text-xs text-slate-400 mt-1">{challenge.description}</p>
+                </div>
+                <div className={cn(
+                  "ml-4 px-3 py-1 rounded-full text-[10px] font-black uppercase",
+                  challenge.completed ? "bg-slate-200 text-slate-400" : "bg-emerald-50 text-emerald-600"
+                )}>
+                  +{challenge.points}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Templates Section */}
       <section>
