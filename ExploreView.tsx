@@ -1,30 +1,47 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Playfair+Display:ital,wght@0,700;1,700&display=swap');
-@import "tailwindcss";
+export type Level = 'mini' | 'advanced' | 'elite';
 
-@theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  --font-serif: "Playfair Display", serif;
-  
-  --color-bg: #F8F9FA;
-  --color-card: #FFFFFF;
-  --color-accent: #10B981;
-  --color-mini: #6EE7B7;
-  --color-advanced: #34D399;
-  --color-elite: #059669;
+export interface SubItem {
+  id: string;
+  name: string;
+  levels: {
+    mini: string;
+    advanced: string;
+    elite: string;
+  };
 }
 
-@layer base {
-  body {
-    @apply bg-bg text-slate-900 font-sans antialiased;
-  }
+export interface Category {
+  id: string;
+  title: string;
+  subItems: SubItem[];
 }
 
-.heatmap-cell {
-  @apply rounded-sm transition-colors duration-200;
+export interface DailyLogEntry {
+  achieved: Level;
+  score: number; // 1-5 stars
+  note?: string;
 }
 
-.glass-panel {
-  @apply bg-white/80 backdrop-blur-md border border-white/20 shadow-sm;
+export interface DailyLog {
+  [categoryId: string]: {
+    [subItemId: string]: DailyLogEntry;
+  };
 }
 
+export interface UserProfile {
+  name: string;
+  totalXp: number;
+  level: number;
+  streak: number;
+}
+
+export interface AppState {
+  profile: UserProfile;
+  categories: Category[];
+  logs: {
+    [date: string]: DailyLog;
+  };
+  dailyNotes: {
+    [date: string]: string;
+  };
+}
