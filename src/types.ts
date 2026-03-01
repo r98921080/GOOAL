@@ -41,4 +41,7 @@ export interface AppState {
   logs: {
     [date: string]: DailyLog;
   };
+  dailyNotes: {
+    [date: string]: string;
+  };
 }

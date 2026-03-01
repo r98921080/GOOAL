@@ -9,20 +9,41 @@ import {
   Share2, 
   Sparkles,
   ChevronLeft,
-  X
+  X,
+  Compass,
+  BookOpen,
+  LayoutDashboard,
+  Cloud
 } from 'lucide-react';
 import { Category, DailyLog, Level, AppState } from './types';
 import { INITIAL_STATE, LEVEL_XP } from './constants';
 import { Heatmap } from './components/Heatmap';
 import { ChartView } from './components/ChartView';
 import { CategoryCard } from './components/CategoryCard';
+import { LogsView } from './components/LogsView';
+import { ExploreView } from './components/ExploreView';
+import { SettingsView } from './components/SettingsView';
+import { CalendarView } from './components/CalendarView';
 import { generateWeeklySummary, parseNLPSetup } from './services/geminiService';
 import { cn } from './lib/utils';
 
+type Tab = 'dashboard' | 'explore' | 'logs' | 'settings';
+
 export default function App() {
+  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [user, setUser] = useState<any>(null);
   const [state, setState] = useState<AppState>(() => {
     const saved = localStorage.getItem('flex_progress_state');
-    return saved ? JSON.parse(saved) : INITIAL_STATE;
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        ...INITIAL_STATE,
+        ...parsed,
+        dailyNotes: parsed.dailyNotes || {}
+      };
+    }
+    return { ...INITIAL_STATE, dailyNotes: {} };
   });
 
   const [isSetupOpen, setIsSetupOpen] = useState(false);
@@ -33,42 +54,85 @@ export default function App() {
   const today = format(new Date(), 'yyyy-MM-dd');
   const todayLogs = useMemo(() => state.logs[today] || {}, [state.logs, today]);
 
+  // Auth & Sync
+  useEffect(() => {
+    fetch('/api/me').then(res => res.json()).then(data => setUser(data));
+    
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        fetch('/api/me').then(res => res.json()).then(data => {
+          setUser(data);
+          syncFromCloud();
+        });
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  const syncFromCloud = async () => {
+    try {
+      const res = await fetch('/api/state');
+      if (res.ok) {
+        const cloudState = await res.json();
+        if (cloudState) setState(cloudState);
+      }
+    } catch (e) {
+      console.error('Sync error', e);
+    }
+  };
+
+  const syncToCloud = async (newState: AppState) => {
+    if (!user) return;
+    try {
+      await fetch('/api/state', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newState)
+      });
+    } catch (e) {
+      console.error('Sync error', e);
+    }
+  };
+
   useEffect(() => {
     localStorage.setItem('flex_progress_state', JSON.stringify(state));
-  }, [state]);
+    syncToCloud(state);
+  }, [state, user]);
 
-  const handleLog = (catId: string, subId: string, level: Level, score: number) => {
+  const handleLog = (catId: string, subId: string, level: Level, score: number, note?: string) => {
     setState(prev => {
       const newLogs = { ...prev.logs };
       if (!newLogs[today]) newLogs[today] = {};
       if (!newLogs[today][catId]) newLogs[today][catId] = {};
       
-      newLogs[today][catId][subId] = { achieved: level, score };
+      newLogs[today][catId][subId] = { achieved: level, score, note };
 
-      // Calculate XP
       const xpGained = LEVEL_XP[level] * score;
       const newTotalXp = prev.profile.totalXp + xpGained;
       const newLevel = Math.floor(newTotalXp / 100) + 1;
-
-      // Streak logic (simplified: if any mini achieved today, streak continues)
-      // Real streak logic would check yesterday
       const newStreak = prev.profile.streak + (prev.logs[today] ? 0 : 1);
 
       return {
         ...prev,
-        profile: {
-          ...prev.profile,
-          totalXp: newTotalXp,
-          level: newLevel,
-          streak: newStreak
-        },
+        profile: { ...prev.profile, totalXp: newTotalXp, level: newLevel, streak: newStreak },
         logs: newLogs
       };
     });
   };
 
-  const handleAddCategory = () => {
-    const parsed = parseNLPSetup(nlpInput);
+  const handleUpdateDailyNote = (date: string, note: string) => {
+    setState(prev => ({
+      ...prev,
+      dailyNotes: {
+        ...(prev.dailyNotes || {}),
+        [date]: note
+      }
+    }));
+  };
+
+  const handleAddCategory = (custom?: Partial<Category>) => {
+    const parsed = custom || parseNLPSetup(nlpInput);
     if (!parsed) {
       alert('請使用格式：類別：項目1, 項目2, 項目3');
       return;
@@ -100,11 +164,129 @@ export default function App() {
     }));
   };
 
-  const handleGetSummary = async () => {
-    setIsSummarizing(true);
-    const summary = await generateWeeklySummary(state.logs, state.categories);
-    setAiSummary(summary);
-    setIsSummarizing(false);
+  const handleLogin = async () => {
+    const res = await fetch('/api/auth/url');
+    const { url } = await res.json();
+    window.open(url, 'google_login', 'width=600,height=700');
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/logout', { method: 'POST' });
+    setUser(null);
+  };
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'explore':
+        return <ExploreView onImport={(cats) => cats.forEach(c => handleAddCategory(c))} />;
+      case 'logs':
+        return <LogsView state={state} onUpdateNote={handleUpdateDailyNote} />;
+      case 'settings':
+        return <SettingsView profile={state.profile} user={user} onLogin={handleLogin} onLogout={handleLogout} />;
+      default:
+        return (
+          <div className="space-y-6">
+            {/* Calendar Section */}
+            <section>
+              <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">成長月曆</h2>
+              <CalendarView 
+                logs={state.logs} 
+                selectedDate={selectedDate} 
+                onDateSelect={(d) => {
+                  setSelectedDate(d);
+                  setActiveTab('logs');
+                }} 
+              />
+            </section>
+
+            {/* Chart Section */}
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest">今日成長平衡</h2>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase">
+                  {state.categories.length <= 3 ? '圓餅趨勢' : '六維平衡'}
+                </span>
+              </div>
+              <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100">
+                <ChartView categories={state.categories} todayLogs={todayLogs} />
+              </div>
+            </section>
+
+            {/* Heatmap Section */}
+            <section>
+              <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">成長足跡 (90D)</h2>
+              <Heatmap logs={state.logs} />
+            </section>
+
+            {/* AI Summary Section */}
+            <section>
+              <button 
+                onClick={async () => {
+                  setIsSummarizing(true);
+                  const summary = await generateWeeklySummary(state.logs, state.categories);
+                  setAiSummary(summary);
+                  setIsSummarizing(false);
+                }}
+                disabled={isSummarizing}
+                className="w-full p-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white flex items-center justify-between group overflow-hidden relative"
+              >
+                <div className="flex items-center gap-3 z-10">
+                  <Sparkles size={18} className={cn(isSummarizing && "animate-spin")} />
+                  <span className="font-bold text-sm">AI 週日誌摘要</span>
+                </div>
+                <ChevronLeft size={18} className="rotate-180 z-10" />
+                <motion.div 
+                  className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                  whileHover={{ scale: 1.1 }}
+                />
+              </button>
+              
+              <AnimatePresence>
+                {aiSummary && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-3 p-5 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-sm leading-relaxed italic"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="font-bold uppercase text-[10px] tracking-widest text-indigo-400">Coach Gemini</span>
+                      <button onClick={() => setAiSummary(null)} className="text-indigo-300 hover:text-indigo-500">
+                        <X size={14} />
+                      </button>
+                    </div>
+                    {aiSummary}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </section>
+
+            {/* Categories List */}
+            <section className="pb-8">
+              <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">核心習慣 (6-3-3)</h2>
+              {state.categories.map(cat => (
+                <CategoryCard 
+                  key={cat.id} 
+                  category={cat} 
+                  logs={todayLogs} 
+                  onLog={(subId, level, score, note) => handleLog(cat.id, subId, level, score, note)}
+                  onDelete={() => handleDeleteCategory(cat.id)}
+                  onEdit={handleEditCategory}
+                />
+              ))}
+              
+              {state.categories.length < 6 && (
+                <button 
+                  onClick={() => setIsSetupOpen(true)}
+                  className="w-full py-6 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 flex flex-col items-center gap-2 hover:border-emerald-300 hover:text-emerald-500 transition-all"
+                >
+                  <Plus size={24} />
+                  <span className="font-bold text-sm">新增大項目</span>
+                </button>
+              )}
+            </section>
+          </div>
+        );
+    }
   };
 
   return (
@@ -130,96 +312,16 @@ export default function App() {
             <Flame size={16} fill="currentColor" />
             {state.profile.streak}
           </div>
-          <button 
-            onClick={() => setIsSetupOpen(true)}
-            className="p-2 text-slate-400 hover:text-slate-600 transition-colors"
-          >
-            <Settings size={20} />
-          </button>
+          {user && (
+            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 border border-emerald-200">
+              <Cloud size={14} />
+            </div>
+          )}
         </div>
       </header>
 
-      <main className="px-6 space-y-6">
-        {/* Chart Section */}
-        <section>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest">今日成長平衡</h2>
-            <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase">
-              {state.categories.length <= 3 ? '圓餅趨勢' : '六維平衡'}
-            </span>
-          </div>
-          <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100">
-            <ChartView categories={state.categories} todayLogs={todayLogs} />
-          </div>
-        </section>
-
-        {/* Heatmap Section */}
-        <section>
-          <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">成長足跡 (90D)</h2>
-          <Heatmap logs={state.logs} />
-        </section>
-
-        {/* AI Summary Section */}
-        <section>
-          <button 
-            onClick={handleGetSummary}
-            disabled={isSummarizing}
-            className="w-full p-4 rounded-2xl bg-gradient-to-r from-indigo-500 to-purple-600 text-white flex items-center justify-between group overflow-hidden relative"
-          >
-            <div className="flex items-center gap-3 z-10">
-              <Sparkles size={18} className={cn(isSummarizing && "animate-spin")} />
-              <span className="font-bold text-sm">AI 週日誌摘要</span>
-            </div>
-            <ChevronLeft size={18} className="rotate-180 z-10" />
-            <motion.div 
-              className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"
-              whileHover={{ scale: 1.1 }}
-            />
-          </button>
-          
-          <AnimatePresence>
-            {aiSummary && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-3 p-5 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-900 text-sm leading-relaxed italic"
-              >
-                <div className="flex justify-between items-start mb-2">
-                  <span className="font-bold uppercase text-[10px] tracking-widest text-indigo-400">Coach Gemini</span>
-                  <button onClick={() => setAiSummary(null)} className="text-indigo-300 hover:text-indigo-500">
-                    <X size={14} />
-                  </button>
-                </div>
-                {aiSummary}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </section>
-
-        {/* Categories List */}
-        <section className="pb-8">
-          <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">核心習慣 (6-3-3)</h2>
-          {state.categories.map(cat => (
-            <CategoryCard 
-              key={cat.id} 
-              category={cat} 
-              logs={todayLogs} 
-              onLog={(subId, level, score) => handleLog(cat.id, subId, level, score)}
-              onDelete={() => handleDeleteCategory(cat.id)}
-              onEdit={handleEditCategory}
-            />
-          ))}
-          
-          {state.categories.length < 6 && (
-            <button 
-              onClick={() => setIsSetupOpen(true)}
-              className="w-full py-6 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 flex flex-col items-center gap-2 hover:border-emerald-300 hover:text-emerald-500 transition-all"
-            >
-              <Plus size={24} />
-              <span className="font-bold text-sm">新增大項目</span>
-            </button>
-          )}
-        </section>
+      <main className="px-6">
+        {renderContent()}
       </main>
 
       {/* Setup Modal */}
@@ -253,7 +355,7 @@ export default function App() {
 
                 <div className="flex gap-3">
                   <button 
-                    onClick={handleAddCategory}
+                    onClick={() => handleAddCategory()}
                     className="flex-1 py-4 bg-emerald-500 text-white font-bold rounded-2xl shadow-lg shadow-emerald-200 hover:bg-emerald-600 transition-colors"
                   >
                     建立結構
@@ -275,17 +377,33 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Tab Bar (Mock) */}
+      {/* Tab Bar */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-md mx-auto h-20 bg-white/80 backdrop-blur-xl border-t border-slate-100 flex items-center justify-around px-8 z-40">
-        <button className="text-emerald-500 flex flex-col items-center gap-1">
-          <Trophy size={24} />
+        <button 
+          onClick={() => setActiveTab('dashboard')}
+          className={cn("flex flex-col items-center gap-1 transition-colors", activeTab === 'dashboard' ? "text-emerald-500" : "text-slate-300")}
+        >
+          <LayoutDashboard size={24} />
           <span className="text-[10px] font-bold uppercase">儀表板</span>
         </button>
-        <button className="text-slate-300 hover:text-slate-500 flex flex-col items-center gap-1">
-          <Sparkles size={24} />
+        <button 
+          onClick={() => setActiveTab('explore')}
+          className={cn("flex flex-col items-center gap-1 transition-colors", activeTab === 'explore' ? "text-emerald-500" : "text-slate-300")}
+        >
+          <Compass size={24} />
           <span className="text-[10px] font-bold uppercase">探索</span>
         </button>
-        <button className="text-slate-300 hover:text-slate-500 flex flex-col items-center gap-1">
+        <button 
+          onClick={() => setActiveTab('logs')}
+          className={cn("flex flex-col items-center gap-1 transition-colors", activeTab === 'logs' ? "text-emerald-500" : "text-slate-300")}
+        >
+          <BookOpen size={24} />
+          <span className="text-[10px] font-bold uppercase">日誌</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('settings')}
+          className={cn("flex flex-col items-center gap-1 transition-colors", activeTab === 'settings' ? "text-emerald-500" : "text-slate-300")}
+        >
           <Settings size={24} />
           <span className="text-[10px] font-bold uppercase">設定</span>
         </button>

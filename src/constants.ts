@@ -52,6 +52,7 @@ export const INITIAL_STATE: AppState = {
     },
   ],
   logs: {},
+  dailyNotes: {},
 };
 
 export const LEVEL_XP: Record<Level, number> = {

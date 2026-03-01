@@ -7,7 +7,7 @@ import { cn } from '../lib/utils';
 interface CategoryCardProps {
   category: Category;
   logs: DailyLog;
-  onLog: (subId: string, level: Level, score: number) => void;
+  onLog: (subId: string, level: Level, score: number, note?: string) => void;
   onDelete: () => void;
   onEdit: (updatedCategory: Category) => void;
 }
@@ -19,6 +19,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({ category, logs, onLo
   const [editTitle, setEditTitle] = useState(category.title);
   const [editSubItems, setEditSubItems] = useState(category.subItems);
   const [tempScore, setTempScore] = useState(5);
+  const [note, setNote] = useState('');
 
   const catLogs = logs[category.id] || {};
   const completedCount = Object.keys(catLogs).length;
@@ -223,13 +224,24 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({ category, logs, onLo
                 <p className="text-slate-400">選擇今日達成的等級與質量</p>
               </div>
 
+              <div className="mb-8">
+                <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">今日心得 (選填)</label>
+                <textarea 
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="記錄一下今天的狀態..."
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none focus:border-emerald-500 h-20 resize-none"
+                />
+              </div>
+
               <div className="grid grid-cols-3 gap-3 mb-8">
                 {(['mini', 'advanced', 'elite'] as Level[]).map(level => (
                   <button
                     key={level}
                     onClick={() => {
-                      onLog(selectedSub.id, level, tempScore);
+                      onLog(selectedSub.id, level, tempScore, note);
                       setSelectedSub(null);
+                      setNote('');
                     }}
                     className="flex flex-col items-center p-4 rounded-2xl border-2 border-slate-100 hover:border-emerald-500 hover:bg-emerald-50 transition-all group"
                   >
