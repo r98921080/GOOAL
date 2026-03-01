@@ -8,11 +8,21 @@ interface CategoryCardProps {
   category: Category;
   logs: DailyLog;
   onLog: (subId: string, level: Level, score: number, note?: string) => void;
+  onResetLog: (subId: string) => void;
   onDelete: () => void;
   onEdit: (updatedCategory: Category) => void;
+  isEditable?: boolean;
 }
 
-export const CategoryCard: React.FC<CategoryCardProps> = ({ category, logs, onLog, onDelete, onEdit }) => {
+export const CategoryCard: React.FC<CategoryCardProps> = ({ 
+  category, 
+  logs, 
+  onLog, 
+  onResetLog, 
+  onDelete, 
+  onEdit,
+  isEditable = true
+}) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedSub, setSelectedSub] = useState<SubItem | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -70,7 +80,7 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({ category, logs, onLo
           <button 
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm('確定要刪除這個大項目嗎？所有相關紀錄將保留在歷史中，但不會再顯示。')) {
+              if (window.confirm(`⚠️ 確定要刪除「${category.title}」嗎？\n這將移除此項目的所有設定，但歷史數據會保留在日誌中。`)) {
                 onDelete();
               }
             }}
@@ -188,12 +198,14 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({ category, logs, onLo
                     {(['mini', 'advanced', 'elite'] as Level[]).map(level => (
                       <button
                         key={level}
-                        onClick={() => setSelectedSub(sub)}
+                        onClick={() => isEditable && setSelectedSub(sub)}
+                        disabled={!isEditable}
                         className={cn(
                           "py-2 px-1 rounded-xl text-[10px] font-bold uppercase transition-all",
                           log?.achieved === level 
                             ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200"
-                            : "bg-white text-slate-400 border border-slate-200 hover:border-emerald-300"
+                            : "bg-white text-slate-400 border border-slate-200 hover:border-emerald-300",
+                          !isEditable && "opacity-50 cursor-not-allowed"
                         )}
                       >
                         {level}
@@ -275,6 +287,21 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({ category, logs, onLo
               >
                 取消
               </button>
+
+              {logs[category.id]?.[selectedSub.id] && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('確定要重置此項目的今日進度嗎？')) {
+                      onResetLog(selectedSub.id);
+                      setSelectedSub(null);
+                    }
+                  }}
+                  className="w-full py-3 mt-3 rounded-2xl bg-rose-50 text-rose-500 text-xs font-bold hover:bg-rose-100 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Trash2 size={14} />
+                  重置今日進度
+                </button>
+              )}
             </motion.div>
           </div>
         )}

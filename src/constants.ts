@@ -6,6 +6,7 @@ export const INITIAL_STATE: AppState = {
     totalXp: 0,
     level: 1,
     streak: 0,
+    achievements: [],
   },
   categories: [
     {
@@ -53,6 +54,10 @@ export const INITIAL_STATE: AppState = {
   ],
   logs: {},
   dailyNotes: {},
+  rewards: {
+    points: 0,
+    unlockedItems: [],
+  },
 };
 
 export const LEVEL_XP: Record<Level, number> = {
@@ -60,3 +65,12 @@ export const LEVEL_XP: Record<Level, number> = {
   advanced: 3,
   elite: 5,
 };
+
+export const ACHIEVEMENTS = [
+  { id: 'first_step', title: '踏出第一步', description: '完成第一次打卡', icon: '🌱' },
+  { id: 'streak_3', title: '三日不懈', description: '連續打卡 3 天', icon: '🔥' },
+  { id: 'streak_7', title: '一週達人', description: '連續打卡 7 天', icon: '💎' },
+  { id: 'level_5', title: '進化者', description: '等級達到 LV.5', icon: '🚀' },
+  { id: 'elite_master', title: '極致追求', description: '單日完成 3 個 Elite 目標', icon: '👑' },
+  { id: 'balance_master', title: '平衡大師', description: '所有大項目皆有打卡紀錄', icon: '⚖️' },
+];

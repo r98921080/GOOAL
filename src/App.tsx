@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Trophy, 
@@ -13,12 +13,12 @@ import {
   Compass,
   BookOpen,
   LayoutDashboard,
-  Cloud
+  Cloud,
+  Zap,
+  Calendar as CalendarIcon
 } from 'lucide-react';
 import { Category, DailyLog, Level, AppState } from './types';
-import { INITIAL_STATE, LEVEL_XP } from './constants';
-import { Heatmap } from './components/Heatmap';
-import { ChartView } from './components/ChartView';
+import { INITIAL_STATE, LEVEL_XP, ACHIEVEMENTS } from './constants';
 import { CategoryCard } from './components/CategoryCard';
 import { LogsView } from './components/LogsView';
 import { ExploreView } from './components/ExploreView';
@@ -26,6 +26,7 @@ import { SettingsView } from './components/SettingsView';
 import { CalendarView } from './components/CalendarView';
 import { generateWeeklySummary, parseNLPSetup } from './services/geminiService';
 import { cn } from './lib/utils';
+import { differenceInDays, startOfDay } from 'date-fns';
 
 type Tab = 'dashboard' | 'explore' | 'logs' | 'settings';
 
@@ -40,7 +41,13 @@ export default function App() {
       return {
         ...INITIAL_STATE,
         ...parsed,
-        dailyNotes: parsed.dailyNotes || {}
+        profile: {
+          ...INITIAL_STATE.profile,
+          ...parsed.profile,
+          achievements: parsed.profile?.achievements || []
+        },
+        dailyNotes: parsed.dailyNotes || {},
+        rewards: parsed.rewards || { points: 0, unlockedItems: [] }
       };
     }
     return { ...INITIAL_STATE, dailyNotes: {} };
@@ -52,7 +59,13 @@ export default function App() {
   const [isSummarizing, setIsSummarizing] = useState(false);
 
   const today = format(new Date(), 'yyyy-MM-dd');
-  const todayLogs = useMemo(() => state.logs[today] || {}, [state.logs, today]);
+  const currentDateStr = format(selectedDate, 'yyyy-MM-dd');
+  const todayLogs = useMemo(() => state.logs[currentDateStr] || {}, [state.logs, currentDateStr]);
+
+  const isEditable = useMemo(() => {
+    const diff = differenceInDays(startOfDay(new Date()), startOfDay(selectedDate));
+    return diff >= 0 && diff <= 7;
+  }, [selectedDate]);
 
   // Auth & Sync
   useEffect(() => {
@@ -100,22 +113,131 @@ export default function App() {
     syncToCloud(state);
   }, [state, user]);
 
-  const handleLog = (catId: string, subId: string, level: Level, score: number, note?: string) => {
-    setState(prev => {
-      const newLogs = { ...prev.logs };
-      if (!newLogs[today]) newLogs[today] = {};
-      if (!newLogs[today][catId]) newLogs[today][catId] = {};
-      
-      newLogs[today][catId][subId] = { achieved: level, score, note };
+  const checkAchievements = (newState: AppState) => {
+    const unlockedIds = new Set(newState.profile.achievements.map(a => a.id));
+    const newAchievements = [...newState.profile.achievements];
+    let pointsGained = 0;
 
-      const xpGained = LEVEL_XP[level] * score;
-      const newTotalXp = prev.profile.totalXp + xpGained;
+    ACHIEVEMENTS.forEach(ach => {
+      if (unlockedIds.has(ach.id)) return;
+
+      let unlocked = false;
+      if (ach.id === 'first_step' && Object.keys(newState.logs).length > 0) unlocked = true;
+      if (ach.id === 'streak_3' && newState.profile.streak >= 3) unlocked = true;
+      if (ach.id === 'streak_7' && newState.profile.streak >= 7) unlocked = true;
+      if (ach.id === 'level_5' && newState.profile.level >= 5) unlocked = true;
+      
+      if (ach.id === 'elite_master') {
+        const todayLogs = newState.logs[today] || {};
+        let eliteCount = 0;
+        Object.values(todayLogs).forEach(cat => {
+          Object.values(cat).forEach(sub => {
+            if (sub.achieved === 'elite') eliteCount++;
+          });
+        });
+        if (eliteCount >= 3) unlocked = true;
+      }
+
+      if (ach.id === 'balance_master') {
+        const todayLogs = newState.logs[today] || {};
+        const activeCats = Object.keys(todayLogs).length;
+        if (activeCats === newState.categories.length && activeCats > 0) unlocked = true;
+      }
+
+      if (unlocked) {
+        newAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
+        pointsGained += 50; // Each achievement gives 50 points
+      }
+    });
+
+    if (pointsGained > 0) {
+      return {
+        ...newState,
+        profile: { ...newState.profile, achievements: newAchievements },
+        rewards: { ...newState.rewards, points: newState.rewards.points + pointsGained }
+      };
+    }
+    return newState;
+  };
+
+  const handleLog = (catId: string, subId: string, level: Level, score: number, note?: string) => {
+    if (!isEditable) {
+      alert('只能補登或修改 7 日內的紀錄');
+      return;
+    }
+    setState(prev => {
+      const oldEntry = prev.logs[currentDateStr]?.[catId]?.[subId];
+      
+      let xpGained = LEVEL_XP[level] * score;
+      let pointsGained = LEVEL_XP[level];
+      if (oldEntry) {
+        xpGained -= LEVEL_XP[oldEntry.achieved] * oldEntry.score;
+        pointsGained -= LEVEL_XP[oldEntry.achieved];
+      }
+
+      const newTotalXp = Math.max(0, prev.profile.totalXp + xpGained);
       const newLevel = Math.floor(newTotalXp / 100) + 1;
-      const newStreak = prev.profile.streak + (prev.logs[today] ? 0 : 1);
+      const newStreak = prev.profile.streak + (prev.logs[currentDateStr] ? 0 : 1);
+      const newPoints = Math.max(0, prev.rewards.points + pointsGained);
+
+      const nextState = {
+        ...prev,
+        profile: { ...prev.profile, totalXp: newTotalXp, level: newLevel, streak: newStreak },
+        rewards: { ...prev.rewards, points: newPoints },
+        logs: {
+          ...prev.logs,
+          [currentDateStr]: {
+            ...(prev.logs[currentDateStr] || {}),
+            [catId]: {
+              ...(prev.logs[currentDateStr]?.[catId] || {}),
+              [subId]: { achieved: level, score, note }
+            }
+          }
+        }
+      };
+
+      return checkAchievements(nextState);
+    });
+  };
+
+  const handleResetLog = (catId: string, subId: string) => {
+    if (!isEditable) {
+      alert('只能修改 7 日內的紀錄');
+      return;
+    }
+    setState(prev => {
+      const dayLogs = prev.logs[currentDateStr];
+      if (!dayLogs || !dayLogs[catId] || !dayLogs[catId][subId]) return prev;
+
+      const oldEntry = dayLogs[catId][subId];
+      
+      const newCatLogs = { ...dayLogs[catId] };
+      delete newCatLogs[subId];
+
+      const newDayLogs = { ...dayLogs };
+      if (Object.keys(newCatLogs).length === 0) {
+        delete newDayLogs[catId];
+      } else {
+        newDayLogs[catId] = newCatLogs;
+      }
+
+      const newLogs = { ...prev.logs };
+      if (Object.keys(newDayLogs).length === 0) {
+        delete newLogs[currentDateStr];
+      } else {
+        newLogs[currentDateStr] = newDayLogs;
+      }
+
+      const xpLost = LEVEL_XP[oldEntry.achieved] * oldEntry.score;
+      const pointsLost = LEVEL_XP[oldEntry.achieved];
+      const newTotalXp = Math.max(0, prev.profile.totalXp - xpLost);
+      const newLevel = Math.floor(newTotalXp / 100) + 1;
+      const newPoints = Math.max(0, prev.rewards.points - pointsLost);
 
       return {
         ...prev,
-        profile: { ...prev.profile, totalXp: newTotalXp, level: newLevel, streak: newStreak },
+        profile: { ...prev.profile, totalXp: newTotalXp, level: newLevel },
+        rewards: { ...prev.rewards, points: newPoints },
         logs: newLogs
       };
     });
@@ -178,7 +300,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'explore':
-        return <ExploreView onImport={(cats) => cats.forEach(c => handleAddCategory(c))} />;
+        return <ExploreView onImport={(cats) => cats.forEach(c => handleAddCategory(c))} profile={state.profile} rewards={state.rewards} />;
       case 'logs':
         return <LogsView state={state} onUpdateNote={handleUpdateDailyNote} />;
       case 'settings':
@@ -188,34 +310,25 @@ export default function App() {
           <div className="space-y-6">
             {/* Calendar Section */}
             <section>
-              <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">成長月曆</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest">成長月曆</h2>
+                {!isSameDay(selectedDate, new Date()) && (
+                  <button 
+                    onClick={() => setSelectedDate(new Date())}
+                    className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase"
+                  >
+                    回到今天
+                  </button>
+                )}
+              </div>
               <CalendarView 
                 logs={state.logs} 
                 selectedDate={selectedDate} 
-                onDateSelect={(d) => {
-                  setSelectedDate(d);
-                  setActiveTab('logs');
-                }} 
+                onDateSelect={(d) => setSelectedDate(d)} 
               />
-            </section>
-
-            {/* Chart Section */}
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest">今日成長平衡</h2>
-                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase">
-                  {state.categories.length <= 3 ? '圓餅趨勢' : '六維平衡'}
-                </span>
-              </div>
-              <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100">
-                <ChartView categories={state.categories} todayLogs={todayLogs} />
-              </div>
-            </section>
-
-            {/* Heatmap Section */}
-            <section>
-              <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">成長足跡 (90D)</h2>
-              <Heatmap logs={state.logs} />
+              {!isEditable && (
+                <p className="mt-2 text-[10px] text-red-400 text-center font-bold">⚠️ 只能編輯 7 日內的紀錄</p>
+              )}
             </section>
 
             {/* AI Summary Section */}
@@ -269,8 +382,10 @@ export default function App() {
                   category={cat} 
                   logs={todayLogs} 
                   onLog={(subId, level, score, note) => handleLog(cat.id, subId, level, score, note)}
+                  onResetLog={(subId) => handleResetLog(cat.id, subId)}
                   onDelete={() => handleDeleteCategory(cat.id)}
                   onEdit={handleEditCategory}
+                  isEditable={isEditable}
                 />
               ))}
               
@@ -308,6 +423,10 @@ export default function App() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 bg-amber-50 text-amber-600 px-3 py-1.5 rounded-full font-bold text-sm">
+            <Zap size={16} fill="currentColor" />
+            {state.rewards.points}
+          </div>
           <div className="flex items-center gap-1 bg-orange-50 text-orange-600 px-3 py-1.5 rounded-full font-bold text-sm">
             <Flame size={16} fill="currentColor" />
             {state.profile.streak}

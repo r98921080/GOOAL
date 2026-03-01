@@ -28,11 +28,20 @@ export interface DailyLog {
   };
 }
 
+export interface Achievement {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlockedAt?: string;
+}
+
 export interface UserProfile {
   name: string;
   totalXp: number;
   level: number;
   streak: number;
+  achievements: Achievement[];
 }
 
 export interface AppState {
@@ -43,5 +52,9 @@ export interface AppState {
   };
   dailyNotes: {
     [date: string]: string;
+  };
+  rewards: {
+    points: number;
+    unlockedItems: string[];
   };
 }

@@ -14,6 +14,7 @@ import {
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { DailyLog } from '../types';
 import { cn } from '../lib/utils';
+import { LEVEL_XP } from '../constants';
 
 interface CalendarViewProps {
   logs: { [date: string]: DailyLog };
@@ -31,15 +32,25 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ logs, selectedDate, 
 
   const calendarDays = eachDayOfInterval({ start: startDate, end: endDate });
 
-  const getDayStatus = (date: Date) => {
+  const getDayScore = (date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
     const dayLog = logs[dateStr];
-    if (!dayLog) return 'none';
+    if (!dayLog) return 0;
     
-    const totalSubItems = Object.values(dayLog).reduce((acc, cat) => acc + Object.keys(cat).length, 0);
-    if (totalSubItems >= 3) return 'high';
-    if (totalSubItems > 0) return 'low';
-    return 'none';
+    let score = 0;
+    Object.values(dayLog).forEach(cat => {
+      Object.values(cat).forEach(sub => {
+        score += LEVEL_XP[sub.achieved] * sub.score;
+      });
+    });
+    return score;
+  };
+
+  const getDayColor = (score: number) => {
+    if (score === 0) return 'text-slate-700';
+    if (score < 10) return 'text-emerald-400';
+    if (score < 30) return 'text-emerald-600';
+    return 'text-emerald-800 font-black';
   };
 
   return (
@@ -64,7 +75,7 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ logs, selectedDate, 
 
       <div className="grid grid-cols-7 gap-1">
         {calendarDays.map((day, i) => {
-          const status = getDayStatus(day);
+          const score = getDayScore(day);
           const isSelected = isSameDay(day, selectedDate);
           const isCurrentMonth = isSameMonth(day, monthStart);
 
@@ -78,13 +89,13 @@ export const CalendarView: React.FC<CalendarViewProps> = ({ logs, selectedDate, 
                 isSelected ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200" : "hover:bg-slate-50"
               )}
             >
-              <span className={cn("text-xs font-bold", isSelected ? "text-white" : "text-slate-700")}>
+              <span className={cn("text-xs font-bold", isSelected ? "text-white" : getDayColor(score))}>
                 {format(day, 'd')}
               </span>
-              {status !== 'none' && !isSelected && (
+              {score > 0 && !isSelected && (
                 <div className={cn(
                   "w-1 h-1 rounded-full mt-1",
-                  status === 'high' ? "bg-emerald-500" : "bg-emerald-300"
+                  score >= 30 ? "bg-emerald-800" : score >= 10 ? "bg-emerald-600" : "bg-emerald-400"
                 )} />
               )}
             </button>
