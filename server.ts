@@ -19,9 +19,19 @@ db.exec(`
     google_id TEXT UNIQUE,
     display_name TEXT,
     email TEXT,
-    state TEXT
+    state TEXT,
+    google_access_token TEXT,
+    google_refresh_token TEXT
   );
 `);
+
+// Migration: Add columns if they don't exist
+try {
+  db.exec("ALTER TABLE users ADD COLUMN google_access_token TEXT");
+} catch (e) {}
+try {
+  db.exec("ALTER TABLE users ADD COLUMN google_refresh_token TEXT");
+} catch (e) {}
 
 async function startServer() {
   const app = express();
@@ -58,9 +68,13 @@ async function startServer() {
       let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(profile.id);
       if (!user) {
         const id = Math.random().toString(36).substr(2, 9);
-        db.prepare('INSERT INTO users (id, google_id, display_name, email) VALUES (?, ?, ?, ?)')
-          .run(id, profile.id, profile.displayName, profile.emails?.[0].value);
+        db.prepare('INSERT INTO users (id, google_id, display_name, email, google_access_token, google_refresh_token) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(id, profile.id, profile.displayName, profile.emails?.[0].value, accessToken, refreshToken);
         user = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+      } else {
+        db.prepare('UPDATE users SET google_access_token = ?, google_refresh_token = ? WHERE id = ?')
+          .run(accessToken, refreshToken || user.google_refresh_token, user.id);
+        user = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id);
       }
       return done(null, user);
     }));
@@ -75,7 +89,9 @@ async function startServer() {
       client_id: process.env.GOOGLE_CLIENT_ID,
       redirect_uri: `${process.env.APP_URL}/auth/google/callback`,
       response_type: 'code',
-      scope: 'profile email',
+      scope: 'profile email https://www.googleapis.com/auth/calendar.events',
+      access_type: 'offline',
+      prompt: 'consent'
     });
     res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
   });
@@ -121,6 +137,42 @@ async function startServer() {
     const user: any = req.user;
     db.prepare('UPDATE users SET state = ? WHERE id = ?').run(JSON.stringify(req.body), user.id);
     res.json({ success: true });
+  });
+
+  // Calendar API
+  app.post('/api/calendar/event', async (req, res) => {
+    if (!req.user) return res.status(401).json({ error: 'Unauthorized' });
+    const user: any = req.user;
+    const { summary, location, description, start, end } = req.body;
+
+    try {
+      const response = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user.google_access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          summary,
+          location,
+          description,
+          start: { dateTime: start, timeZone: 'Asia/Taipei' },
+          end: { dateTime: end, timeZone: 'Asia/Taipei' }
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('Calendar API Error:', error);
+        return res.status(response.status).json(error);
+      }
+
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error('Calendar Error:', error);
+      res.status(500).json({ error: 'Failed to create calendar event' });
+    }
   });
 
   // Vite middleware for development

@@ -40,11 +40,20 @@ import {
 interface LogsViewProps {
   state: AppState;
   onUpdateNote: (date: string, note: string) => void;
+  onAnalyzeJournal: (date: string) => Promise<any[] | undefined>;
+  onRemoveTodo: (id: string) => void;
+  onCreateCalendarEvent: (event: any) => Promise<boolean>;
 }
 
 type LogTab = 'daily' | 'trends' | 'diary';
 
-export const LogsView: React.FC<LogsViewProps> = ({ state, onUpdateNote }) => {
+export const LogsView: React.FC<LogsViewProps> = ({ 
+  state, 
+  onUpdateNote,
+  onAnalyzeJournal,
+  onRemoveTodo,
+  onCreateCalendarEvent
+}) => {
   const [activeTab, setActiveTab] = useState<LogTab>('daily');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(state.categories[0]?.id || '');
@@ -52,6 +61,11 @@ export const LogsView: React.FC<LogsViewProps> = ({ state, onUpdateNote }) => {
   const [tempNote, setTempNote] = useState('');
   const [viewMonth, setViewMonth] = useState(new Date());
   const [trendDetailDate, setTrendDetailDate] = useState<string | null>(null);
+  
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [suggestedEvents, setSuggestedEvents] = useState<any[]>([]);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [currentEventIndex, setCurrentEventIndex] = useState(0);
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const dayLog = state.logs[dateStr] || {};
@@ -60,6 +74,32 @@ export const LogsView: React.FC<LogsViewProps> = ({ state, onUpdateNote }) => {
   const last7Days = useMemo(() => {
     return [...Array(7)].map((_, i) => subDays(new Date(), i)).reverse();
   }, []);
+
+  const handleAnalyze = async () => {
+    setIsAnalyzing(true);
+    const events = await onAnalyzeJournal(dateStr);
+    if (events && events.length > 0) {
+      setSuggestedEvents(events);
+      setCurrentEventIndex(0);
+      setShowEventModal(true);
+    }
+    setIsAnalyzing(false);
+  };
+
+  const handleConfirmEvent = async () => {
+    const event = suggestedEvents[currentEventIndex];
+    const success = await onCreateCalendarEvent(event);
+    if (success) {
+      if (currentEventIndex < suggestedEvents.length - 1) {
+        setCurrentEventIndex(prev => prev + 1);
+      } else {
+        setShowEventModal(false);
+        alert('行程已成功建立至 Google 日曆！');
+      }
+    } else {
+      alert('建立行程失敗，請檢查權限或網路。');
+    }
+  };
 
   const renderDaily = () => (
     <div className="space-y-6">
@@ -79,15 +119,28 @@ export const LogsView: React.FC<LogsViewProps> = ({ state, onUpdateNote }) => {
             當日心得
           </h3>
           {!isEditingNote ? (
-            <button 
-              onClick={() => {
-                setTempNote(dayNote);
-                setIsEditingNote(true);
-              }}
-              className="p-2 text-slate-400 hover:text-emerald-500"
-            >
-              <Edit2 size={16} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button 
+                onClick={handleAnalyze}
+                disabled={isAnalyzing || !dayNote}
+                className={cn(
+                  "p-2 rounded-xl transition-all flex items-center gap-1 text-[10px] font-bold uppercase",
+                  isAnalyzing ? "bg-slate-100 text-slate-400" : "bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                )}
+              >
+                <Sparkles size={14} className={cn(isAnalyzing && "animate-spin")} />
+                AI 檢視
+              </button>
+              <button 
+                onClick={() => {
+                  setTempNote(dayNote);
+                  setIsEditingNote(true);
+                }}
+                className="p-2 text-slate-400 hover:text-emerald-500"
+              >
+                <Edit2 size={16} />
+              </button>
+            </div>
           ) : (
             <button 
               onClick={() => {
@@ -140,6 +193,56 @@ export const LogsView: React.FC<LogsViewProps> = ({ state, onUpdateNote }) => {
             </div>
           </div>
           <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-white/10 blur-3xl rounded-full" />
+        </div>
+      )}
+
+      {/* Todo List Module */}
+      {state.todos.length > 0 && (
+        <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100">
+          <h3 className="font-black text-slate-800 mb-4 flex items-center gap-2">
+            <History size={18} className="text-emerald-500" />
+            待辦事項
+          </h3>
+          <div className="flex flex-wrap gap-2">
+            {state.todos.map(todo => (
+              <div 
+                key={todo.id} 
+                className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full"
+              >
+                <button 
+                  onClick={() => onRemoveTodo(todo.id)}
+                  className="text-slate-300 hover:text-red-500 transition-colors"
+                >
+                  <X size={14} />
+                </button>
+                <span className="text-xs font-bold text-slate-600">{todo.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Daily Analysis Module */}
+      {state.dailyAnalyses[dateStr] && (
+        <div className="bg-slate-900 rounded-[32px] p-6 text-white shadow-lg">
+          <h3 className="font-black text-lg mb-4 flex items-center gap-2">
+            <TrendingUp size={20} className="text-emerald-400" />
+            心智圖分析
+          </h3>
+          <div className="space-y-4">
+            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+              <h4 className="text-[10px] font-black uppercase text-emerald-400 mb-2 tracking-widest">中心思想</h4>
+              <p className="text-sm text-slate-300 leading-relaxed italic">
+                {state.dailyAnalyses[dateStr].summary}
+              </p>
+            </div>
+            <div className="p-4 bg-white/5 rounded-2xl border border-white/10">
+              <h4 className="text-[10px] font-black uppercase text-emerald-400 mb-2 tracking-widest">心智結構</h4>
+              <div className="text-xs text-slate-400 whitespace-pre-line font-mono">
+                {state.dailyAnalyses[dateStr].mindMap}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -429,6 +532,100 @@ export const LogsView: React.FC<LogsViewProps> = ({ state, onUpdateNote }) => {
           {activeTab === 'trends' && renderTrends()}
           {activeTab === 'diary' && renderDiary()}
         </motion.div>
+      </AnimatePresence>
+      
+      {/* Calendar Event Modal */}
+      <AnimatePresence>
+        {showEventModal && suggestedEvents[currentEventIndex] && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="bg-white rounded-[40px] w-full max-w-sm overflow-hidden shadow-2xl"
+            >
+              <div className="p-8">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-6">
+                  <CalendarIcon size={24} />
+                </div>
+                <h3 className="text-xl font-black text-slate-800 mb-2">建立行事曆行程</h3>
+                <p className="text-sm text-slate-400 mb-6">AI 偵測到您的日誌中提到以下行程，是否要加入 Google 日曆？</p>
+                
+                <div className="space-y-4 mb-8">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">行程名稱</label>
+                    <input 
+                      type="text" 
+                      value={suggestedEvents[currentEventIndex].summary}
+                      onChange={(e) => {
+                        const newEvents = [...suggestedEvents];
+                        newEvents[currentEventIndex].summary = e.target.value;
+                        setSuggestedEvents(newEvents);
+                      }}
+                      className="w-full bg-transparent text-sm font-bold text-slate-700 outline-none"
+                    />
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">地點</label>
+                    <input 
+                      type="text" 
+                      value={suggestedEvents[currentEventIndex].location}
+                      onChange={(e) => {
+                        const newEvents = [...suggestedEvents];
+                        newEvents[currentEventIndex].location = e.target.value;
+                        setSuggestedEvents(newEvents);
+                      }}
+                      className="w-full bg-transparent text-sm font-bold text-slate-700 outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">開始時間</label>
+                      <input 
+                        type="datetime-local" 
+                        value={suggestedEvents[currentEventIndex].start.slice(0, 16)}
+                        onChange={(e) => {
+                          const newEvents = [...suggestedEvents];
+                          newEvents[currentEventIndex].start = e.target.value;
+                          setSuggestedEvents(newEvents);
+                        }}
+                        className="w-full bg-transparent text-[10px] font-bold text-slate-700 outline-none"
+                      />
+                    </div>
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">結束時間</label>
+                      <input 
+                        type="datetime-local" 
+                        value={suggestedEvents[currentEventIndex].end.slice(0, 16)}
+                        onChange={(e) => {
+                          const newEvents = [...suggestedEvents];
+                          newEvents[currentEventIndex].end = e.target.value;
+                          setSuggestedEvents(newEvents);
+                        }}
+                        className="w-full bg-transparent text-[10px] font-bold text-slate-700 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button 
+                    onClick={() => setShowEventModal(false)}
+                    className="flex-1 py-4 rounded-2xl text-xs font-bold text-slate-400 hover:bg-slate-50 transition-all"
+                  >
+                    取消
+                  </button>
+                  <button 
+                    onClick={handleConfirmEvent}
+                    className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl text-xs font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all"
+                  >
+                    確認建立
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
       </AnimatePresence>
     </div>
   );

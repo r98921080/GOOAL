@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { format } from 'date-fns';
+import { format, subDays, differenceInDays, startOfDay, isSameDay } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Trophy, 
@@ -24,9 +24,8 @@ import { LogsView } from './components/LogsView';
 import { ExploreView } from './components/ExploreView';
 import { SettingsView } from './components/SettingsView';
 import { CalendarView } from './components/CalendarView';
-import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts } from './services/geminiService';
+import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts, analyzeJournal, generateDailyAnalysis } from './services/geminiService';
 import { cn } from './lib/utils';
-import { differenceInDays, startOfDay, isSameDay } from 'date-fns';
 
 type Tab = 'dashboard' | 'explore' | 'logs' | 'settings';
 
@@ -50,6 +49,8 @@ export default function App() {
         rewards: parsed.rewards || { points: 0, unlockedItems: [] },
         dailyChallenges: parsed.dailyChallenges || {},
         funFacts: parsed.funFacts || {},
+        todos: parsed.todos || [],
+        dailyAnalyses: parsed.dailyAnalyses || {},
       };
     }
     return { ...INITIAL_STATE, dailyNotes: {} };
@@ -158,22 +159,111 @@ export default function App() {
     }
   }, [today]);
 
+  // Midnight Analysis Generation
+  useEffect(() => {
+    const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+    if (!state.dailyAnalyses[yesterday] && state.dailyNotes[yesterday]) {
+      const generate = async () => {
+        const analysis = await generateDailyAnalysis(state.logs[yesterday] || {}, state.dailyNotes[yesterday]);
+        if (analysis.summary || analysis.mindMap) {
+          setState(prev => ({
+            ...prev,
+            dailyAnalyses: { ...prev.dailyAnalyses, [yesterday]: analysis }
+          }));
+        }
+      };
+      generate();
+    }
+  }, [today]);
+
   const handleCompleteChallenge = (challengeId: string) => {
     setState(prev => {
       const challenges = prev.dailyChallenges[today] || [];
       const challenge = challenges.find(c => c.id === challengeId);
-      if (!challenge || challenge.completed) return prev;
+      if (!challenge) return prev;
 
+      const isCompleting = !challenge.completed;
       const newChallenges = challenges.map(c => 
-        c.id === challengeId ? { ...c, completed: true } : c
+        c.id === challengeId ? { ...c, completed: isCompleting } : c
       );
 
       return {
         ...prev,
-        rewards: { ...prev.rewards, points: prev.rewards.points + challenge.points },
+        rewards: { 
+          ...prev.rewards, 
+          points: isCompleting ? prev.rewards.points + challenge.points : prev.rewards.points - challenge.points 
+        },
         dailyChallenges: { ...prev.dailyChallenges, [today]: newChallenges }
       };
     });
+  };
+
+  const handleRemoveTodo = (todoId: string) => {
+    setState(prev => ({
+      ...prev,
+      todos: prev.todos.filter(t => t.id !== todoId)
+    }));
+  };
+
+  const handleAnalyzeJournal = async (date: string) => {
+    const note = state.dailyNotes[date];
+    if (!note) return;
+
+    const analysis = await analyzeJournal(note);
+    
+    // Add new todos
+    if (analysis.todos.length > 0) {
+      const newTodos = analysis.todos.map(text => ({
+        id: `todo_${Math.random().toString(36).substr(2, 9)}`,
+        text
+      }));
+      setState(prev => ({
+        ...prev,
+        todos: [...prev.todos, ...newTodos]
+      }));
+    }
+
+    return analysis.calendarEvents;
+  };
+
+  const handleCreateCalendarEvent = async (event: any) => {
+    try {
+      const response = await fetch('/api/calendar/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(event)
+      });
+      if (!response.ok) throw new Error('Failed to create event');
+      return true;
+    } catch (e) {
+      console.error('Calendar error', e);
+      return false;
+    }
+  };
+
+  const handleLogin = async () => {
+    try {
+      const res = await fetch('/api/auth/url');
+      const { url } = await res.json();
+      const popup = window.open(url, 'google_auth', 'width=600,height=600');
+      
+      const messageListener = (event: MessageEvent) => {
+        if (event.data.type === 'OAUTH_AUTH_SUCCESS') {
+          window.removeEventListener('message', messageListener);
+          // Refresh user state
+          fetch('/api/me').then(r => r.json()).then(u => {
+            setUser(u);
+            // After login, try to sync state from cloud
+            fetch('/api/state').then(r => r.json()).then(s => {
+              if (s) setState(s);
+            });
+          });
+        }
+      };
+      window.addEventListener('message', messageListener);
+    } catch (e) {
+      console.error('Login error', e);
+    }
   };
 
   const checkAchievements = (newState: AppState) => {
@@ -381,12 +471,6 @@ export default function App() {
     }));
   };
 
-  const handleLogin = async () => {
-    const res = await fetch('/api/auth/url');
-    const { url } = await res.json();
-    window.open(url, 'google_login', 'width=600,height=700');
-  };
-
   const handleLogout = async () => {
     await fetch('/api/logout', { method: 'POST' });
     setUser(null);
@@ -405,7 +489,15 @@ export default function App() {
           />
         );
       case 'logs':
-        return <LogsView state={state} onUpdateNote={handleUpdateDailyNote} />;
+        return (
+          <LogsView 
+            state={state} 
+            onUpdateNote={handleUpdateDailyNote}
+            onAnalyzeJournal={handleAnalyzeJournal}
+            onRemoveTodo={handleRemoveTodo}
+            onCreateCalendarEvent={handleCreateCalendarEvent}
+          />
+        );
       case 'settings':
         return <SettingsView profile={state.profile} user={user} onLogin={handleLogin} onLogout={handleLogout} />;
       default:
@@ -536,10 +628,20 @@ export default function App() {
             <Flame size={16} fill="currentColor" />
             {state.profile.streak}
           </div>
-          {user && (
-            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 border border-emerald-200">
-              <Cloud size={14} />
-            </div>
+          {user ? (
+            <img 
+              src={`https://ui-avatars.com/api/?name=${user.display_name}&background=random`} 
+              className="w-8 h-8 rounded-full border-2 border-white shadow-sm" 
+              title={user.display_name}
+            />
+          ) : (
+            <button 
+              onClick={handleLogin}
+              className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 text-slate-400 hover:text-emerald-500 transition-all"
+              title="登入 Google 帳號"
+            >
+              <Plus size={20} />
+            </button>
           )}
         </div>
       </header>

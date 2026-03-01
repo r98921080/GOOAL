@@ -1,7 +1,112 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { DailyLog, Category, DailyChallenge, FunFact } from "../types";
+import { DailyLog, Category, DailyChallenge, FunFact, TodoItem, DailyAnalysis } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+export interface AIJournalAnalysis {
+  calendarEvents: {
+    summary: string;
+    location: string;
+    description: string;
+    start: string;
+    end: string;
+  }[];
+  todos: string[];
+}
+
+export async function analyzeJournal(text: string): Promise<AIJournalAnalysis> {
+  if (!process.env.GEMINI_API_KEY || !text.trim()) return { calendarEvents: [], todos: [] };
+
+  const prompt = `
+    你是一位貼心的個人助理。請閱讀以下使用者的日誌內容，並提取出：
+    1. 可能需要建立在 Google 日曆上的行程或約會（包含主題、地點、描述、開始時間、結束時間）。
+       - 時間格式請使用 ISO 8601 (例如: 2026-03-01T10:00:00)。
+       - 如果日誌中沒有明確時間，請根據上下文推測或給予合理的預設值（例如隔天上午 10 點）。
+    2. 可能需要做的待辦事項（以簡短關鍵字表示）。
+
+    日誌內容：
+    "${text}"
+
+    請以 JSON 格式回傳。
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            calendarEvents: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  summary: { type: Type.STRING },
+                  location: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  start: { type: Type.STRING },
+                  end: { type: Type.STRING }
+                },
+                required: ["summary", "location", "description", "start", "end"]
+              }
+            },
+            todos: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING }
+            }
+          },
+          required: ["calendarEvents", "todos"]
+        }
+      }
+    });
+    return JSON.parse(response.text || '{"calendarEvents": [], "todos": []}');
+  } catch (error) {
+    console.error("Analyze Journal Error:", error);
+    return { calendarEvents: [], todos: [] };
+  }
+}
+
+export async function generateDailyAnalysis(logs: DailyLog, note: string): Promise<DailyAnalysis> {
+  if (!process.env.GEMINI_API_KEY) return { summary: "", mindMap: "" };
+
+  const prompt = `
+    你是一位心理分析師與成長教練。請根據使用者今日的完成紀錄與日誌，進行深度分析。
+    
+    今日紀錄：${JSON.stringify(logs)}
+    今日日誌：${note}
+    
+    任務：
+    1. 總結今日的中心思想與狀況（約 100 字）。
+    2. 建立一個心智圖結構，包含中心主題、主要分支與子分支。
+    
+    請以 JSON 格式回傳，心智圖請使用簡單的層級結構。
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            summary: { type: Type.STRING },
+            mindMap: { type: Type.STRING, description: "心智圖的文字描述或結構化字串" }
+          },
+          required: ["summary", "mindMap"]
+        }
+      }
+    });
+    return JSON.parse(response.text || '{"summary": "", "mindMap": ""}');
+  } catch (error) {
+    console.error("Daily Analysis Error:", error);
+    return { summary: "", mindMap: "" };
+  }
+}
 
 export async function getFunFacts(): Promise<FunFact[]> {
   if (!process.env.GEMINI_API_KEY) return [];

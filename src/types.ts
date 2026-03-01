@@ -58,6 +58,16 @@ export interface FunFact {
   category: string;
 }
 
+export interface TodoItem {
+  id: string;
+  text: string;
+}
+
+export interface DailyAnalysis {
+  summary: string;
+  mindMap: string;
+}
+
 export interface AppState {
   profile: UserProfile;
   categories: Category[];
@@ -76,5 +86,9 @@ export interface AppState {
   };
   funFacts: {
     [date: string]: FunFact[];
+  };
+  todos: TodoItem[];
+  dailyAnalyses: {
+    [date: string]: DailyAnalysis;
   };
 }

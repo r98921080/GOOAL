@@ -60,6 +60,8 @@ export const INITIAL_STATE: AppState = {
   },
   dailyChallenges: {},
   funFacts: {},
+  todos: [],
+  dailyAnalyses: {},
 };
 
 export const LEVEL_XP: Record<Level, number> = {

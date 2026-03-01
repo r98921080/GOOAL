@@ -94,7 +94,6 @@ export const ExploreView: React.FC<ExploreViewProps> = ({ onImport, profile, rew
               <button
                 key={challenge.id}
                 onClick={() => onCompleteChallenge(challenge.id)}
-                disabled={challenge.completed}
                 className={cn(
                   "w-full p-4 rounded-2xl border transition-all flex items-center justify-between text-left",
                   challenge.completed 
@@ -106,13 +105,18 @@ export const ExploreView: React.FC<ExploreViewProps> = ({ onImport, profile, rew
                   <h4 className={cn("font-bold text-sm", challenge.completed ? "text-slate-400 line-through" : "text-slate-700")}>
                     {challenge.title}
                   </h4>
-                  <p className="text-xs text-slate-400 mt-1">{challenge.description}</p>
+                  <p className={cn(
+                    "text-base mt-1 font-medium", 
+                    challenge.completed ? "text-slate-400 line-through" : "text-indigo-900"
+                  )}>
+                    {challenge.description}
+                  </p>
                 </div>
                 <div className={cn(
                   "ml-4 px-3 py-1 rounded-full text-[10px] font-black uppercase",
                   challenge.completed ? "bg-slate-200 text-slate-400" : "bg-emerald-50 text-emerald-600"
                 )}>
-                  +{challenge.points}
+                  {challenge.completed ? '已完成' : `+${challenge.points}`}
                 </div>
               </button>
             ))}
