@@ -1,7 +1,9 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { Settings as SettingsIcon, LogOut, User, Cloud, Shield, Bell, Music, RefreshCw, EyeOff } from 'lucide-react';
+import { Settings as SettingsIcon, LogOut, User, Cloud, Shield, Bell, Music, RefreshCw, EyeOff, Palette } from 'lucide-react';
 import { UserProfile, AppSettings } from '../types';
+import { THEME_COLORS } from '../constants';
+import { cn } from '../lib/utils';
 
 interface SettingsViewProps {
   profile: UserProfile;
@@ -104,6 +106,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   <option value="relax">放鬆 (Relax)</option>
                   <option value="energy">活力 (Energy)</option>
                   <option value="ambient">氛圍 (Ambient)</option>
+                  <option value="nature">自然 (Nature)</option>
+                  <option value="classical">古典 (Classical)</option>
+                  <option value="lofi">Lo-fi (Lofi)</option>
                 </select>
               </div>
               <button 
@@ -115,6 +120,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
               </button>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Theme Settings */}
+      <section>
+        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 ml-2">背景與主題</h4>
+        <div className="bg-white rounded-3xl p-6 border border-slate-100 space-y-4">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-500 flex items-center justify-center">
+              <Palette size={20} />
+            </div>
+            <div>
+              <span className="font-bold text-slate-700 block text-sm">背景模板</span>
+              <span className="text-[10px] text-slate-400">切換您喜愛的視覺風格</span>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-3 gap-3">
+            {THEME_COLORS.map(theme => (
+              <button
+                key={theme.id}
+                onClick={() => onUpdateSettings({ themeColor: theme.id })}
+                className={cn(
+                  "p-3 rounded-2xl border-2 transition-all text-center",
+                  settings.themeColor === theme.id 
+                    ? "border-emerald-500 bg-emerald-50" 
+                    : "border-slate-100 bg-slate-50 hover:border-slate-200"
+                )}
+              >
+                <div className={cn("w-full h-8 rounded-lg mb-2 shadow-inner", theme.class)} />
+                <span className={cn("text-[10px] font-bold", settings.themeColor === theme.id ? "text-emerald-600" : "text-slate-500")}>
+                  {theme.name}
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -200,8 +241,4 @@ function ChevronRight({ className, size }: { className?: string, size?: number }
       <path d="m9 18 6-6-6-6" />
     </svg>
   );
-}
-
-function cn(...classes: any[]) {
-  return classes.filter(Boolean).join(' ');
 }

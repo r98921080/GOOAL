@@ -63,8 +63,9 @@ async function startServer() {
     passport.use(new GoogleStrategy({
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: `${process.env.APP_URL}/auth/google/callback`,
-    }, (accessToken, refreshToken, profile, done) => {
+      callbackURL: `${process.env.APP_URL || 'http://localhost:3000'}/auth/google/callback`,
+      passReqToCallback: true
+    }, (req, accessToken, refreshToken, profile, done) => {
       let user = db.prepare('SELECT * FROM users WHERE google_id = ?').get(profile.id);
       if (!user) {
         const id = Math.random().toString(36).substr(2, 9);
@@ -85,9 +86,10 @@ async function startServer() {
     if (!process.env.GOOGLE_CLIENT_ID) {
       return res.status(400).json({ error: 'Google Auth not configured' });
     }
+    const appUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
     const params = new URLSearchParams({
       client_id: process.env.GOOGLE_CLIENT_ID,
-      redirect_uri: `${process.env.APP_URL}/auth/google/callback`,
+      redirect_uri: `${appUrl}/auth/google/callback`,
       response_type: 'code',
       scope: 'profile email https://www.googleapis.com/auth/calendar.events',
       access_type: 'offline',
@@ -96,7 +98,11 @@ async function startServer() {
     res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
   });
 
-  app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), (req, res) => {
+  app.get('/auth/google/callback', (req, res, next) => {
+    passport.authenticate('google', { 
+      failureRedirect: '/'
+    })(req, res, next);
+  }, (req, res) => {
     res.send(`
       <html>
         <body>

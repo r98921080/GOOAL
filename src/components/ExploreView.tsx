@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Compass, Zap, Sparkles, Brain, Heart, Activity, Target, RefreshCw, Loader2 } from 'lucide-react';
 import { Category, DailyChallenge, ExploreAnalysis, AppState } from '../types';
-import { ACHIEVEMENTS } from '../constants';
 import { cn } from '../lib/utils';
 import { performDeepLifeAnalysis } from '../services/geminiService';
 
@@ -15,7 +14,6 @@ interface ExploreViewProps {
 
 export const ExploreView: React.FC<ExploreViewProps> = ({ state, onUpdateAnalysis, dailyChallenges, onCompleteChallenge }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const unlockedIds = new Set(state.profile.achievements.map((a: any) => a.id));
   const analysis = state.exploreAnalysis;
 
   const handleDeepAnalysis = async () => {
@@ -73,37 +71,6 @@ export const ExploreView: React.FC<ExploreViewProps> = ({ state, onUpdateAnalysi
           </div>
         </section>
       )}
-
-      {/* Achievements Section */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <Zap className="text-indigo-500" size={20} />
-          <h2 className="text-lg font-black text-slate-800">成就系統</h2>
-        </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {ACHIEVEMENTS.map(ach => {
-            const isUnlocked = unlockedIds.has(ach.id);
-            return (
-              <motion.div 
-                key={ach.id}
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                className={cn(
-                  "p-4 rounded-3xl border transition-all flex flex-col items-center text-center",
-                  isUnlocked ? "bg-indigo-50 border-indigo-100" : "bg-slate-50 border-slate-100 grayscale opacity-50"
-                )}
-              >
-                <span className="text-3xl mb-2">{ach.icon}</span>
-                <h4 className="text-xs font-black text-slate-800 mb-1">{ach.title}</h4>
-                <p className="text-[10px] text-slate-400 leading-tight">{ach.description}</p>
-                {isUnlocked && (
-                  <div className="mt-2 text-[8px] font-bold text-indigo-500 uppercase">已達成</div>
-                )}
-              </motion.div>
-            );
-          })}
-        </div>
-      </section>
 
       {/* AI Deep Analysis Section */}
       <section className="relative overflow-hidden bg-slate-900 rounded-[40px] p-8 text-white shadow-2xl">

@@ -1,31 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { format, subDays, differenceInDays, startOfDay, isSameDay } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Trophy, 
-  Flame, 
-  Plus, 
-  Settings, 
-  Share2, 
-  Sparkles,
-  ChevronLeft,
-  X,
-  Compass,
-  BookOpen,
-  LayoutDashboard,
-  Cloud,
-  Zap,
-  Calendar as CalendarIcon
-} from 'lucide-react';
+import { Trophy, Flame, Plus, Settings, Share2, Sparkles, ChevronLeft, X, Compass, BookOpen, LayoutDashboard, Cloud, Zap, Calendar as CalendarIcon, Flower2, Sprout, TreeDeciduous } from 'lucide-react';
 import { Category, DailyLog, Level, AppState, DailyChallenge, SubItem, ExploreAnalysis, AppSettings } from './types';
-import { INITIAL_STATE, LEVEL_XP, ACHIEVEMENTS } from './constants';
+import { INITIAL_STATE, LEVEL_XP, THEME_COLORS } from './constants';
 import { CategoryCard } from './components/CategoryCard';
 import { LogsView } from './components/LogsView';
 import { ExploreView } from './components/ExploreView';
 import { SettingsView } from './components/SettingsView';
 import { CalendarView } from './components/CalendarView';
 import { MusicPlayer } from './components/MusicPlayer';
-import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts, analyzeJournal, generateDailyAnalysis, pickMusic } from './services/geminiService';
+import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts, analyzeJournal, generateDailyAnalysis, pickMusic, generateNoteTitle } from './services/geminiService';
 import { cn } from './lib/utils';
 
 type Tab = 'dashboard' | 'explore' | 'logs' | 'settings';
@@ -44,10 +29,10 @@ export default function App() {
         profile: {
           ...INITIAL_STATE.profile,
           ...parsed.profile,
-          achievements: parsed.profile?.achievements || []
         },
         dailyNotes: parsed.dailyNotes || {},
-        rewards: parsed.rewards || { points: 0, unlockedItems: [] },
+        noteTitles: parsed.noteTitles || {},
+        rewards: parsed.rewards || { points: 0, unlockedItems: [], gardenProgress: 0 },
         dailyChallenges: parsed.dailyChallenges || {},
         funFacts: parsed.funFacts || {},
         todos: parsed.todos || [],
@@ -72,6 +57,7 @@ export default function App() {
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [isGeneratingChallenges, setIsGeneratingChallenges] = useState(false);
   const [isGeneratingFunFacts, setIsGeneratingFunFacts] = useState(false);
+  const [isLevelInfoOpen, setIsLevelInfoOpen] = useState(false);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const currentDateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -87,8 +73,13 @@ export default function App() {
     fetch('/api/me').then(res => res.json()).then(data => setUser(data));
     
     const handleMessage = (event: MessageEvent) => {
-      // Validate origin
-      if (!event.origin.endsWith('.run.app') && !event.origin.includes('localhost')) return;
+      // More permissive origin check for development
+      const isAllowedOrigin = 
+        event.origin.endsWith('.run.app') || 
+        event.origin.includes('localhost') || 
+        event.origin === window.location.origin;
+
+      if (!isAllowedOrigin) return;
       
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
         fetch('/api/me').then(res => res.json()).then(data => {
@@ -286,65 +277,23 @@ export default function App() {
   };
 
   const handleLogin = async () => {
+    // Open popup immediately to avoid blocker
+    const popup = window.open('about:blank', 'google_auth', 'width=600,height=700');
+    
+    if (!popup) {
+      alert('請允許彈出視窗以進行登入。');
+      return;
+    }
+
     try {
       const res = await fetch('/api/auth/url');
       const { url } = await res.json();
-      // Use window.location.origin for better mobile compatibility
-      const popup = window.open(url, 'google_auth', 'width=600,height=700');
-      
-      if (!popup) {
-        alert('請允許彈出視窗以進行登入。');
-      }
+      popup.location.href = url;
     } catch (e) {
       console.error('Login error', e);
+      popup.close();
+      alert('登入失敗，請稍後再試。');
     }
-  };
-
-  const checkAchievements = (newState: AppState) => {
-    const unlockedIds = new Set(newState.profile.achievements.map(a => a.id));
-    const newAchievements = [...newState.profile.achievements];
-    let pointsGained = 0;
-
-    ACHIEVEMENTS.forEach(ach => {
-      if (unlockedIds.has(ach.id)) return;
-
-      let unlocked = false;
-      if (ach.id === 'first_step' && Object.keys(newState.logs).length > 0) unlocked = true;
-      if (ach.id === 'streak_3' && newState.profile.streak >= 3) unlocked = true;
-      if (ach.id === 'streak_7' && newState.profile.streak >= 7) unlocked = true;
-      if (ach.id === 'level_5' && newState.profile.level >= 5) unlocked = true;
-      
-      if (ach.id === 'elite_master') {
-        const todayLogs = newState.logs[today] || {};
-        let eliteCount = 0;
-        Object.values(todayLogs).forEach(cat => {
-          Object.values(cat).forEach(sub => {
-            if (sub.achieved === 'elite') eliteCount++;
-          });
-        });
-        if (eliteCount >= 3) unlocked = true;
-      }
-
-      if (ach.id === 'balance_master') {
-        const todayLogs = newState.logs[today] || {};
-        const activeCats = Object.keys(todayLogs).length;
-        if (activeCats === newState.categories.length && activeCats > 0) unlocked = true;
-      }
-
-      if (unlocked) {
-        newAchievements.push({ ...ach, unlockedAt: new Date().toISOString() });
-        pointsGained += 50; // Each achievement gives 50 points
-      }
-    });
-
-    if (pointsGained > 0) {
-      return {
-        ...newState,
-        profile: { ...newState.profile, achievements: newAchievements },
-        rewards: { ...newState.rewards, points: newState.rewards.points + pointsGained }
-      };
-    }
-    return newState;
   };
 
   const handleLog = (catId: string, subId: string, level: Level, note?: string) => {
@@ -362,15 +311,40 @@ export default function App() {
         pointsGained -= LEVEL_XP[oldEntry.achieved];
       }
 
-      const newTotalXp = Math.max(0, prev.profile.totalXp + xpGained);
+      // Combo Bonus: If multiple habits logged today
+      const todayLogs = prev.logs[currentDateStr] || {};
+      let habitsLoggedToday = 0;
+      Object.values(todayLogs).forEach(cat => {
+        habitsLoggedToday += Object.keys(cat).length;
+      });
+      const comboBonus = habitsLoggedToday >= 3 ? 1.5 : 1.0;
+
+      // Streak Bonus: 10% extra for every 7 days streak (max 50%)
+      const streakBonus = 1 + Math.min(0.5, Math.floor(prev.profile.streak / 7) * 0.1);
+
+      const totalXpGained = Math.round(xpGained * comboBonus * streakBonus);
+      const totalPointsGained = Math.round(pointsGained * 2 * comboBonus * streakBonus);
+
+      const newTotalXp = Math.max(0, prev.profile.totalXp + totalXpGained);
       const newLevel = Math.floor(newTotalXp / 100) + 1;
       const newStreak = prev.profile.streak + (prev.logs[currentDateStr] ? 0 : 1);
-      const newPoints = Math.max(0, prev.rewards.points + pointsGained);
+      const newPoints = Math.max(0, prev.rewards.points + totalPointsGained);
+      let newGardenProgress = prev.rewards.gardenProgress + (xpGained * 5); 
+      let bonusPoints = 0;
 
-      const nextState = {
+      if (newGardenProgress >= 100) {
+        newGardenProgress = 0;
+        bonusPoints = 500; 
+      }
+
+      return {
         ...prev,
         profile: { ...prev.profile, totalXp: newTotalXp, level: newLevel, streak: newStreak },
-        rewards: { ...prev.rewards, points: newPoints },
+        rewards: { 
+          ...prev.rewards, 
+          points: newPoints + bonusPoints, 
+          gardenProgress: newGardenProgress 
+        },
         logs: {
           ...prev.logs,
           [currentDateStr]: {
@@ -382,8 +356,6 @@ export default function App() {
           }
         }
       };
-
-      return checkAchievements(nextState);
     });
   };
 
@@ -430,7 +402,7 @@ export default function App() {
     });
   };
 
-  const handleUpdateDailyNote = (date: string, note: string) => {
+  const handleUpdateDailyNote = async (date: string, note: string) => {
     setState(prev => ({
       ...prev,
       dailyNotes: {
@@ -438,6 +410,18 @@ export default function App() {
         [date]: note
       }
     }));
+
+    // Auto-generate title if it doesn't exist or if note is long enough
+    if (note.length > 10) {
+      const title = await generateNoteTitle(note);
+      setState(prev => ({
+        ...prev,
+        noteTitles: {
+          ...(prev.noteTitles || {}),
+          [date]: title
+        }
+      }));
+    }
   };
 
   const handleAddCategory = (custom?: Partial<Category>) => {
@@ -597,7 +581,7 @@ export default function App() {
             </section>
 
             {/* AI Summary Section */}
-            <section className="pb-12">
+            <section className="pb-4">
               <button 
                 onClick={async () => {
                   setIsSummarizing(true);
@@ -639,13 +623,103 @@ export default function App() {
                 )}
               </AnimatePresence>
             </section>
+
+            {/* Garden Section - Moved to bottom */}
+            <section className="bg-white/40 backdrop-blur-sm rounded-[40px] p-6 border border-white/20 shadow-xl overflow-hidden relative mb-12">
+              <div className="relative z-10">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-black text-slate-800 text-sm flex items-center gap-2">
+                    <Sprout size={18} className="text-emerald-500" />
+                    成長花園
+                  </h2>
+                  <div className="flex gap-2">
+                    {state.profile.streak >= 3 && (
+                      <span className="text-[10px] font-black text-orange-600 bg-orange-100 px-2 py-1 rounded-full uppercase flex items-center gap-1">
+                        <Flame size={10} /> 狂熱加成
+                      </span>
+                    )}
+                    <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full uppercase">
+                      {state.rewards.gardenProgress < 30 ? '發芽中' : state.rewards.gardenProgress < 70 ? '茁壯中' : '繁花盛開'}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex items-end justify-around h-24 mb-4">
+                  <motion.div 
+                    animate={{ 
+                      scale: state.rewards.gardenProgress > 10 ? 1 : 0,
+                      rotate: state.rewards.gardenProgress > 10 ? [0, 5, -5, 0] : 0
+                    }}
+                    transition={{ repeat: Infinity, duration: 5 }}
+                    className="text-emerald-400"
+                  >
+                    <Sprout size={24} />
+                  </motion.div>
+                  <motion.div 
+                    animate={{ 
+                      scale: state.rewards.gardenProgress > 40 ? 1.2 : 0,
+                      y: state.rewards.gardenProgress > 40 ? [0, -5, 0] : 0
+                    }}
+                    transition={{ repeat: Infinity, duration: 3 }}
+                    className="text-teal-500"
+                  >
+                    <TreeDeciduous size={32} />
+                  </motion.div>
+                  <motion.div 
+                    animate={{ 
+                      scale: state.rewards.gardenProgress > 80 ? 1.5 : 0,
+                      rotate: state.rewards.gardenProgress > 80 ? [0, 10, -10, 0] : 0,
+                      filter: state.rewards.gardenProgress > 80 ? 'drop-shadow(0 0 8px rgba(236, 72, 153, 0.4))' : 'none'
+                    }}
+                    transition={{ repeat: Infinity, duration: 4 }}
+                    className="text-pink-500"
+                  >
+                    <Flower2 size={40} />
+                  </motion.div>
+                </div>
+
+                <div className="w-full h-2 bg-slate-200/50 rounded-full overflow-hidden">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: `${state.rewards.gardenProgress}%` }}
+                    className="h-full bg-gradient-to-r from-emerald-400 to-teal-500"
+                  />
+                </div>
+                <div className="flex justify-between items-center mt-2">
+                  <p className="text-[10px] text-slate-500 font-bold">
+                    打卡灌溉進度 {state.rewards.gardenProgress}%
+                  </p>
+                  <p className="text-[10px] text-slate-400 font-bold italic">
+                    滿 100% 可獲得 500 點獎勵
+                  </p>
+                </div>
+              </div>
+              <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-emerald-500/10 blur-3xl rounded-full" />
+              {state.profile.streak >= 7 && (
+                <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+                  {[...Array(5)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ y: -20, x: Math.random() * 300, opacity: 0 }}
+                      animate={{ y: 300, opacity: [0, 1, 0] }}
+                      transition={{ duration: 3, repeat: Infinity, delay: i * 0.8 }}
+                      className="absolute text-yellow-400/20"
+                    >
+                      <Sparkles size={12} />
+                    </motion.div>
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
         );
     }
   };
 
+  const currentTheme = THEME_COLORS.find(t => t.id === state.settings.themeColor) || THEME_COLORS[0];
+
   return (
-    <div className="max-w-md mx-auto min-h-screen pb-24 relative">
+    <div className={cn("max-w-md mx-auto min-h-screen pb-24 relative transition-colors duration-500", currentTheme.class)}>
       <MusicPlayer settings={state.settings} />
       
       {/* Header */}
@@ -657,7 +731,13 @@ export default function App() {
           <div>
             <h1 className="font-black text-xl tracking-tight text-slate-800">一起轉大人</h1>
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase">LV.{state.profile.level}</span>
+              <button 
+                onClick={() => setIsLevelInfoOpen(true)}
+                className="text-[10px] font-bold bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded uppercase hover:bg-slate-200 transition-colors flex items-center gap-1"
+              >
+                LV.{state.profile.level}
+                <Sparkles size={8} className="text-emerald-500" />
+              </button>
               <div className="w-20 h-1 bg-slate-100 rounded-full overflow-hidden">
                 <div className="h-full bg-emerald-400" style={{ width: `${state.profile.totalXp % 100}%` }} />
               </div>
@@ -694,6 +774,76 @@ export default function App() {
       <main className="px-6">
         {renderContent()}
       </main>
+
+      {/* Level Info Modal */}
+      <AnimatePresence>
+        {isLevelInfoOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-md bg-white rounded-[40px] p-8 shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                  <Trophy className="text-amber-500" /> 等級與積分說明
+                </h2>
+                <button onClick={() => setIsLevelInfoOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6 text-slate-600">
+                <div className="bg-emerald-50 p-4 rounded-2xl">
+                  <h3 className="font-bold text-emerald-800 mb-2 flex items-center gap-2">
+                    <Zap size={16} /> 經驗值 (XP) 獲取
+                  </h3>
+                  <ul className="text-sm space-y-2">
+                    <li className="flex justify-between"><span>Mini 目標</span> <span className="font-bold text-emerald-600">+10 XP</span></li>
+                    <li className="flex justify-between"><span>Advanced 目標</span> <span className="font-bold text-emerald-600">+30 XP</span></li>
+                    <li className="flex justify-between"><span>Elite 目標</span> <span className="font-bold text-emerald-600">+50 XP</span></li>
+                  </ul>
+                </div>
+
+                <div className="bg-amber-50 p-4 rounded-2xl">
+                  <h3 className="font-bold text-amber-800 mb-2 flex items-center gap-2">
+                    <Sparkles size={16} /> 加成機制 (更快速進化！)
+                  </h3>
+                  <ul className="text-sm space-y-3">
+                    <li className="flex gap-3">
+                      <div className="bg-white p-2 rounded-lg h-fit"><Flame size={14} className="text-orange-500" /></div>
+                      <div>
+                        <p className="font-bold text-slate-800">連續打卡獎勵</p>
+                        <p className="text-xs">每滿 7 天連續打卡，XP 與積分獲得量提升 10% (最高 50%)。</p>
+                      </div>
+                    </li>
+                    <li className="flex gap-3">
+                      <div className="bg-white p-2 rounded-lg h-fit"><Zap size={14} className="text-blue-500" /></div>
+                      <div>
+                        <p className="font-bold text-slate-800">Combo 連擊</p>
+                        <p className="text-xs">單日打卡超過 3 個項目，該日所有獲得 XP 與積分提升 50%！</p>
+                      </div>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl">
+                  <h3 className="font-bold text-slate-800 mb-2">等級晉升</h3>
+                  <p className="text-sm">每累積 100 XP 即可提升一級。等級越高，代表你對習慣的掌控力越強！</p>
+                </div>
+
+                <button 
+                  onClick={() => setIsLevelInfoOpen(false)}
+                  className="w-full py-4 bg-slate-800 text-white font-bold rounded-2xl"
+                >
+                  我知道了
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Setup Modal */}
       <AnimatePresence>

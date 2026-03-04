@@ -6,7 +6,6 @@ export const INITIAL_STATE: AppState = {
     totalXp: 0,
     level: 1,
     streak: 0,
-    achievements: [],
   },
   categories: [
     {
@@ -54,9 +53,13 @@ export const INITIAL_STATE: AppState = {
   ],
   logs: {},
   dailyNotes: {},
+  noteTitles: {},
   rewards: {
     points: 0,
     unlockedItems: [],
+    gardenProgress: 0,
+    gardenLevel: 1,
+    gardenHistory: [],
   },
   dailyChallenges: {},
   funFacts: {},
@@ -68,20 +71,23 @@ export const INITIAL_STATE: AppState = {
     notificationsEnabled: true,
     privacyMode: false,
     lastMusicUpdate: new Date(0).toISOString(),
+    themeColor: 'default',
   }
 };
 
+export const THEME_COLORS = [
+  { id: 'default', name: '極簡白', class: 'bg-slate-50' },
+  { id: 'emerald', name: '翡翠綠', class: 'bg-gradient-to-br from-emerald-50 to-teal-50' },
+  { id: 'indigo', name: '星空藍', class: 'bg-gradient-to-br from-indigo-50 to-purple-50' },
+  { id: 'amber', name: '晨曦橘', class: 'bg-gradient-to-br from-amber-50 to-orange-50' },
+  { id: 'rose', name: '玫瑰粉', class: 'bg-gradient-to-br from-rose-50 to-pink-50' },
+  { id: 'dark', name: '深邃黑', class: 'bg-slate-900 text-slate-100' },
+];
+
 export const LEVEL_XP: Record<Level, number> = {
-  mini: 1,
-  advanced: 3,
-  elite: 5,
+  mini: 10,
+  advanced: 30,
+  elite: 50,
 };
 
-export const ACHIEVEMENTS = [
-  { id: 'first_step', title: '踏出第一步', description: '完成第一次打卡', icon: '🌱' },
-  { id: 'streak_3', title: '三日不懈', description: '連續打卡 3 天', icon: '🔥' },
-  { id: 'streak_7', title: '一週達人', description: '連續打卡 7 天', icon: '💎' },
-  { id: 'level_5', title: '進化者', description: '等級達到 LV.5', icon: '🚀' },
-  { id: 'elite_master', title: '極致追求', description: '單日完成 3 個 Elite 目標', icon: '👑' },
-  { id: 'balance_master', title: '平衡大師', description: '所有大項目皆有打卡紀錄', icon: '⚖️' },
-];
+

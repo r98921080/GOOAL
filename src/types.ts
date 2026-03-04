@@ -27,20 +27,13 @@ export interface DailyLog {
   };
 }
 
-export interface Achievement {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  unlockedAt?: string;
-}
+
 
 export interface UserProfile {
   name: string;
   totalXp: number;
   level: number;
   streak: number;
-  achievements: Achievement[];
 }
 
 export interface DailyChallenge {
@@ -79,11 +72,12 @@ export interface ExploreAnalysis {
 
 export interface AppSettings {
   musicEnabled: boolean;
-  musicTheme: 'focus' | 'relax' | 'energy' | 'ambient';
+  musicTheme: 'focus' | 'relax' | 'energy' | 'ambient' | 'nature' | 'classical' | 'lofi';
   notificationsEnabled: boolean;
   privacyMode: boolean;
   lastMusicUpdate: string;
   currentMusicUrl?: string;
+  themeColor: string;
 }
 
 export interface AppState {
@@ -95,9 +89,15 @@ export interface AppState {
   dailyNotes: {
     [date: string]: string;
   };
+  noteTitles: {
+    [date: string]: string;
+  };
   rewards: {
     points: number;
     unlockedItems: string[];
+    gardenProgress: number;
+    gardenLevel: number;
+    gardenHistory: string[];
   };
   dailyChallenges: {
     [date: string]: DailyChallenge[];

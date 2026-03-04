@@ -71,8 +71,6 @@ export async function performDeepLifeAnalysis(state: AppState): Promise<ExploreA
 }
 
 export async function pickMusic(theme: string): Promise<{ url: string; title: string }> {
-  // In a real app, this would query a music API or a curated list.
-  // For this demo, we'll provide some high-quality royalty-free links.
   const musicMap: Record<string, { url: string; title: string }[]> = {
     focus: [
       { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title: "專注冥想曲 1" },
@@ -89,11 +87,48 @@ export async function pickMusic(theme: string): Promise<{ url: string; title: st
     ambient: [
       { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3", title: "環境氛圍 1" },
       { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3", title: "自然之聲" }
+    ],
+    nature: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3", title: "森林晨曦" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3", title: "溪流潺潺" }
+    ],
+    classical: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3", title: "巴哈：G弦上的詠嘆調" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3", title: "蕭邦：夜曲" }
+    ],
+    lofi: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3", title: "雨夜咖啡廳" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3", title: "復古節拍" }
     ]
   };
 
   const tracks = musicMap[theme] || musicMap.focus;
   return tracks[Math.floor(Math.random() * tracks.length)];
+}
+
+export async function generateNoteTitle(text: string): Promise<string> {
+  if (!process.env.GEMINI_API_KEY || !text.trim()) return "無標題日誌";
+
+  const prompt = `
+    請根據以下日誌內容，生成一個極簡短、有記憶點的標題（5個字以內）。
+    標題應該能反映當天的核心情緒或事件。
+    
+    日誌內容：
+    "${text}"
+    
+    請直接回傳標題文字。
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+    });
+    return response.text?.trim() || "今日紀錄";
+  } catch (error) {
+    console.error("Generate Note Title Error:", error);
+    return "今日紀錄";
+  }
 }
 
 export interface AIJournalAnalysis {

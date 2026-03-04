@@ -13,7 +13,12 @@ import {
   Save,
   Sparkles,
   Info,
-  X
+  X,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { 
   LineChart, 
@@ -66,6 +71,8 @@ export const LogsView: React.FC<LogsViewProps> = ({
   const [suggestedEvents, setSuggestedEvents] = useState<any[]>([]);
   const [showEventModal, setShowEventModal] = useState(false);
   const [currentEventIndex, setCurrentEventIndex] = useState(0);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedEntries, setExpandedEntries] = useState<Set<string>>(new Set());
 
   const dateStr = format(selectedDate, 'yyyy-MM-dd');
   const dayLog = state.logs[dateStr] || {};
@@ -114,10 +121,17 @@ export const LogsView: React.FC<LogsViewProps> = ({
 
       <div className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-black text-slate-800 flex items-center gap-2">
-            <Book size={18} className="text-emerald-500" />
-            當日心得
-          </h3>
+          <div className="flex flex-col">
+            <h3 className="font-black text-slate-800 flex items-center gap-2">
+              <Book size={18} className="text-emerald-500" />
+              當日心得
+            </h3>
+            {state.noteTitles?.[dateStr] && (
+              <span className="text-[10px] font-black text-emerald-600 ml-7 uppercase tracking-wider">
+                「{state.noteTitles[dateStr]}」
+              </span>
+            )}
+          </div>
           {!isEditingNote ? (
             <div className="flex items-center gap-1">
               <button 
@@ -464,40 +478,118 @@ export const LogsView: React.FC<LogsViewProps> = ({
 
   const renderDiary = () => {
     const diaryEntries = Object.entries(state.dailyNotes || {})
+      .filter(([date, note]) => {
+        const title = state.noteTitles?.[date] || '';
+        return note.toLowerCase().includes(searchQuery.toLowerCase()) || 
+               title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+               date.includes(searchQuery);
+      })
       .sort((a, b) => b[0].localeCompare(a[0]));
+
+    const toggleExpand = (date: string) => {
+      const newSet = new Set(expandedEntries);
+      if (newSet.has(date)) newSet.delete(date);
+      else newSet.add(date);
+      setExpandedEntries(newSet);
+    };
+
+    const expandAll = () => {
+      setExpandedEntries(new Set(diaryEntries.map(([date]) => date)));
+    };
+
+    const collapseAll = () => {
+      setExpandedEntries(new Set());
+    };
 
     return (
       <div className="space-y-4">
+        <div className="flex items-center gap-2 bg-white rounded-2xl p-3 border border-slate-100 shadow-sm">
+          <Search size={18} className="text-slate-400" />
+          <input 
+            type="text" 
+            placeholder="搜尋日誌內容、標題或日期..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 bg-transparent text-sm outline-none text-slate-600"
+          />
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <button 
+            onClick={expandAll}
+            className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 hover:text-emerald-500"
+          >
+            <Maximize2 size={12} /> 全部展開
+          </button>
+          <button 
+            onClick={collapseAll}
+            className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 hover:text-emerald-500"
+          >
+            <Minimize2 size={12} /> 全部收合
+          </button>
+        </div>
+
         {diaryEntries.length === 0 ? (
           <div className="p-12 text-center bg-white rounded-[32px] border border-dashed border-slate-200 text-slate-300">
-            尚未撰寫任何日記
+            {searchQuery ? '找不到符合的日誌' : '尚未撰寫任何日記'}
           </div>
         ) : (
-          diaryEntries.map(([date, note]) => (
-            <motion.div 
-              key={date}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100"
-            >
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-xs font-black text-slate-800">{date}</span>
-                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{format(parseISO(date), 'EEEE')}</span>
-              </div>
-              <p className="text-sm text-slate-600 leading-relaxed italic line-clamp-3">
-                "{note}"
-              </p>
-              <button 
-                onClick={() => {
-                  setSelectedDate(parseISO(date));
-                  setActiveTab('daily');
-                }}
-                className="mt-4 text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1"
+          diaryEntries.map(([date, note]) => {
+            const isExpanded = expandedEntries.has(date);
+            const title = state.noteTitles?.[date];
+
+            return (
+              <motion.div 
+                key={date}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100"
               >
-                查看詳情 <ChevronRight size={10} />
-              </button>
-            </motion.div>
-          ))
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-xs font-black text-slate-800">{date}</span>
+                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{format(parseISO(date), 'EEEE')}</span>
+                    </div>
+                    {title && (
+                      <h4 className="text-sm font-black text-emerald-600">「{title}」</h4>
+                    )}
+                  </div>
+                  <button 
+                    onClick={() => toggleExpand(date)}
+                    className="p-2 text-slate-300 hover:text-emerald-500"
+                  >
+                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                  </button>
+                </div>
+                
+                <div className={cn(
+                  "text-sm text-slate-600 leading-relaxed italic transition-all duration-300",
+                  !isExpanded && "line-clamp-2"
+                )}>
+                  "{note}"
+                </div>
+
+                <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-50">
+                  <button 
+                    onClick={() => {
+                      setSelectedDate(parseISO(date));
+                      setActiveTab('daily');
+                    }}
+                    className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1"
+                  >
+                    查看詳情 <ChevronRight size={10} />
+                  </button>
+                  <button 
+                    onClick={() => toggleExpand(date)}
+                    className="text-[10px] font-bold text-slate-400 uppercase"
+                  >
+                    {isExpanded ? '收合' : '展開閱讀'}
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })
         )}
       </div>
     );
