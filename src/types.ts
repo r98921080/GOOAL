@@ -68,6 +68,24 @@ export interface DailyAnalysis {
   mindMap: string;
 }
 
+export interface ExploreAnalysis {
+  emotions: string;
+  psychology: string;
+  balance: string;
+  advice: string;
+  goalAdjustments: string;
+  updatedAt: string;
+}
+
+export interface AppSettings {
+  musicEnabled: boolean;
+  musicTheme: 'focus' | 'relax' | 'energy' | 'ambient';
+  notificationsEnabled: boolean;
+  privacyMode: boolean;
+  lastMusicUpdate: string;
+  currentMusicUrl?: string;
+}
+
 export interface AppState {
   profile: UserProfile;
   categories: Category[];
@@ -91,4 +109,6 @@ export interface AppState {
   dailyAnalyses: {
     [date: string]: DailyAnalysis;
   };
+  exploreAnalysis?: ExploreAnalysis;
+  settings: AppSettings;
 }

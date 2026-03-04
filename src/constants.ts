@@ -62,6 +62,13 @@ export const INITIAL_STATE: AppState = {
   funFacts: {},
   todos: [],
   dailyAnalyses: {},
+  settings: {
+    musicEnabled: false,
+    musicTheme: 'focus',
+    notificationsEnabled: true,
+    privacyMode: false,
+    lastMusicUpdate: new Date(0).toISOString(),
+  }
 };
 
 export const LEVEL_XP: Record<Level, number> = {

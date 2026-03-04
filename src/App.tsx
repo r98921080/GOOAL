@@ -17,14 +17,15 @@ import {
   Zap,
   Calendar as CalendarIcon
 } from 'lucide-react';
-import { Category, DailyLog, Level, AppState, DailyChallenge, SubItem } from './types';
+import { Category, DailyLog, Level, AppState, DailyChallenge, SubItem, ExploreAnalysis, AppSettings } from './types';
 import { INITIAL_STATE, LEVEL_XP, ACHIEVEMENTS } from './constants';
 import { CategoryCard } from './components/CategoryCard';
 import { LogsView } from './components/LogsView';
 import { ExploreView } from './components/ExploreView';
 import { SettingsView } from './components/SettingsView';
 import { CalendarView } from './components/CalendarView';
-import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts, analyzeJournal, generateDailyAnalysis } from './services/geminiService';
+import { MusicPlayer } from './components/MusicPlayer';
+import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts, analyzeJournal, generateDailyAnalysis, pickMusic } from './services/geminiService';
 import { cn } from './lib/utils';
 
 type Tab = 'dashboard' | 'explore' | 'logs' | 'settings';
@@ -51,6 +52,10 @@ export default function App() {
         funFacts: parsed.funFacts || {},
         todos: parsed.todos || [],
         dailyAnalyses: parsed.dailyAnalyses || {},
+        settings: {
+          ...INITIAL_STATE.settings,
+          ...parsed.settings
+        }
       };
     }
     return { ...INITIAL_STATE, dailyNotes: {} };
@@ -82,6 +87,9 @@ export default function App() {
     fetch('/api/me').then(res => res.json()).then(data => setUser(data));
     
     const handleMessage = (event: MessageEvent) => {
+      // Validate origin
+      if (!event.origin.endsWith('.run.app') && !event.origin.includes('localhost')) return;
+      
       if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
         fetch('/api/me').then(res => res.json()).then(data => {
           setUser(data);
@@ -123,6 +131,41 @@ export default function App() {
     syncToCloud(state);
   }, [state, user]);
 
+  // Weekly Music Update (Sunday)
+  useEffect(() => {
+    const now = new Date();
+    const isSunday = now.getDay() === 0;
+    const lastUpdate = new Date(state.settings.lastMusicUpdate);
+    const diffDays = differenceInDays(now, lastUpdate);
+
+    if (isSunday && diffDays >= 7) {
+      handleRefreshMusic();
+    }
+  }, []);
+
+  const handleRefreshMusic = async () => {
+    const music = await pickMusic(state.settings.musicTheme);
+    setState(prev => ({
+      ...prev,
+      settings: {
+        ...prev.settings,
+        currentMusicUrl: music.url,
+        lastMusicUpdate: new Date().toISOString()
+      }
+    }));
+  };
+
+  const handleUpdateSettings = (newSettings: Partial<AppSettings>) => {
+    setState(prev => ({
+      ...prev,
+      settings: { ...prev.settings, ...newSettings }
+    }));
+  };
+
+  const handleUpdateAnalysis = (analysis: ExploreAnalysis) => {
+    setState(prev => ({ ...prev, exploreAnalysis: analysis }));
+  };
+
   // Daily Challenges Generation
   useEffect(() => {
     if (!state.dailyChallenges[today] && state.categories.length > 0 && !isGeneratingChallenges) {
@@ -146,7 +189,8 @@ export default function App() {
     if (!state.funFacts[today] && !isGeneratingFunFacts) {
       const generate = async () => {
         setIsGeneratingFunFacts(true);
-        const facts = await getFunFacts();
+        const existingFacts = Object.values(state.funFacts).flat().map(f => f.content);
+        const facts = await getFunFacts(existingFacts);
         if (facts.length > 0) {
           setState(prev => ({
             ...prev,
@@ -245,22 +289,12 @@ export default function App() {
     try {
       const res = await fetch('/api/auth/url');
       const { url } = await res.json();
-      const popup = window.open(url, 'google_auth', 'width=600,height=600');
+      // Use window.location.origin for better mobile compatibility
+      const popup = window.open(url, 'google_auth', 'width=600,height=700');
       
-      const messageListener = (event: MessageEvent) => {
-        if (event.data.type === 'OAUTH_AUTH_SUCCESS') {
-          window.removeEventListener('message', messageListener);
-          // Refresh user state
-          fetch('/api/me').then(r => r.json()).then(u => {
-            setUser(u);
-            // After login, try to sync state from cloud
-            fetch('/api/state').then(r => r.json()).then(s => {
-              if (s) setState(s);
-            });
-          });
-        }
-      };
-      window.addEventListener('message', messageListener);
+      if (!popup) {
+        alert('請允許彈出視窗以進行登入。');
+      }
     } catch (e) {
       console.error('Login error', e);
     }
@@ -481,9 +515,8 @@ export default function App() {
       case 'explore':
         return (
           <ExploreView 
-            onImport={(cats) => cats.forEach(c => handleAddCategory(c))} 
-            profile={state.profile} 
-            rewards={state.rewards} 
+            state={state}
+            onUpdateAnalysis={handleUpdateAnalysis}
             dailyChallenges={state.dailyChallenges[today] || []}
             onCompleteChallenge={handleCompleteChallenge}
           />
@@ -499,7 +532,17 @@ export default function App() {
           />
         );
       case 'settings':
-        return <SettingsView profile={state.profile} user={user} onLogin={handleLogin} onLogout={handleLogout} />;
+        return (
+          <SettingsView 
+            profile={state.profile} 
+            user={user} 
+            settings={state.settings}
+            onLogin={handleLogin} 
+            onLogout={handleLogout} 
+            onUpdateSettings={handleUpdateSettings}
+            onRefreshMusic={handleRefreshMusic}
+          />
+        );
       default:
         return (
           <div className="space-y-6">
@@ -526,8 +569,35 @@ export default function App() {
               )}
             </section>
 
+            {/* Categories List */}
+            <section className="pb-8">
+              <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">核心習慣 (6-3-3)</h2>
+              {state.categories.map(cat => (
+                <CategoryCard 
+                  key={cat.id} 
+                  category={cat} 
+                  logs={todayLogs} 
+                  onLog={(subId, level, note) => handleLog(cat.id, subId, level, note)}
+                  onResetLog={(subId) => handleResetLog(cat.id, subId)}
+                  onDelete={() => handleDeleteCategory(cat.id)}
+                  onEdit={handleEditCategory}
+                  isEditable={isEditable}
+                />
+              ))}
+              
+              {state.categories.length < 6 && (
+                <button 
+                  onClick={startSetup}
+                  className="w-full py-6 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 flex flex-col items-center gap-2 hover:border-emerald-300 hover:text-emerald-500 transition-all"
+                >
+                  <Plus size={24} />
+                  <span className="font-bold text-sm">新增大項目</span>
+                </button>
+              )}
+            </section>
+
             {/* AI Summary Section */}
-            <section>
+            <section className="pb-12">
               <button 
                 onClick={async () => {
                   setIsSummarizing(true);
@@ -569,33 +639,6 @@ export default function App() {
                 )}
               </AnimatePresence>
             </section>
-
-            {/* Categories List */}
-            <section className="pb-8">
-              <h2 className="font-bold text-slate-500 text-xs uppercase tracking-widest mb-4">核心習慣 (6-3-3)</h2>
-              {state.categories.map(cat => (
-                <CategoryCard 
-                  key={cat.id} 
-                  category={cat} 
-                  logs={todayLogs} 
-                  onLog={(subId, level, note) => handleLog(cat.id, subId, level, note)}
-                  onResetLog={(subId) => handleResetLog(cat.id, subId)}
-                  onDelete={() => handleDeleteCategory(cat.id)}
-                  onEdit={handleEditCategory}
-                  isEditable={isEditable}
-                />
-              ))}
-              
-              {state.categories.length < 6 && (
-                <button 
-                  onClick={startSetup}
-                  className="w-full py-6 border-2 border-dashed border-slate-200 rounded-3xl text-slate-400 flex flex-col items-center gap-2 hover:border-emerald-300 hover:text-emerald-500 transition-all"
-                >
-                  <Plus size={24} />
-                  <span className="font-bold text-sm">新增大項目</span>
-                </button>
-              )}
-            </section>
           </div>
         );
     }
@@ -603,6 +646,8 @@ export default function App() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen pb-24 relative">
+      <MusicPlayer settings={state.settings} />
+      
       {/* Header */}
       <header className="p-6 flex items-center justify-between sticky top-0 bg-bg/80 backdrop-blur-md z-40">
         <div className="flex items-center gap-3">

@@ -1,7 +1,100 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { DailyLog, Category, DailyChallenge, FunFact, TodoItem, DailyAnalysis } from "../types";
+import { DailyLog, Category, DailyChallenge, FunFact, TodoItem, DailyAnalysis, AppState, ExploreAnalysis } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+export async function performDeepLifeAnalysis(state: AppState): Promise<ExploreAnalysis> {
+  if (!process.env.GEMINI_API_KEY) {
+    return {
+      emotions: "請設定 API Key 以啟用分析。",
+      psychology: "請設定 API Key 以啟用分析。",
+      balance: "請設定 API Key 以啟用分析。",
+      advice: "請設定 API Key 以啟用分析。",
+      goalAdjustments: "請設定 API Key 以啟用分析。",
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  const prompt = `
+    你是一位全方位的生命教練與心理學家。請根據使用者的所有數據，進行深度的人格與生活狀態分析。
+    
+    數據：
+    - 類別：${JSON.stringify(state.categories.map(c => c.title))}
+    - 最近紀錄：${JSON.stringify(state.logs)}
+    - 最近日誌：${JSON.stringify(state.dailyNotes)}
+    - 成就：${JSON.stringify(state.profile.achievements)}
+    
+    請分析：
+    1. 使用者的情緒與心理狀態（察覺潛在壓力或動力）。
+    2. 生活與工作的平衡狀況。
+    3. 給予 3 個具體建議，讓使用者離目標更近或成為更好的人。
+    4. 洞見觀察：目標是否需要微調？是否有過於激進或保守的地方？
+    
+    請以 JSON 格式回傳。
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            emotions: { type: Type.STRING },
+            psychology: { type: Type.STRING },
+            balance: { type: Type.STRING },
+            advice: { type: Type.STRING },
+            goalAdjustments: { type: Type.STRING }
+          },
+          required: ["emotions", "psychology", "balance", "advice", "goalAdjustments"]
+        }
+      }
+    });
+    const data = JSON.parse(response.text || "{}");
+    return {
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+  } catch (error) {
+    console.error("Deep Life Analysis Error:", error);
+    return {
+      emotions: "分析失敗",
+      psychology: "分析失敗",
+      balance: "分析失敗",
+      advice: "分析失敗",
+      goalAdjustments: "分析失敗",
+      updatedAt: new Date().toISOString()
+    };
+  }
+}
+
+export async function pickMusic(theme: string): Promise<{ url: string; title: string }> {
+  // In a real app, this would query a music API or a curated list.
+  // For this demo, we'll provide some high-quality royalty-free links.
+  const musicMap: Record<string, { url: string; title: string }[]> = {
+    focus: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title: "專注冥想曲 1" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title: "深層工作流" }
+    ],
+    relax: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", title: "午後寧靜" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", title: "星空下的放鬆" }
+    ],
+    energy: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3", title: "活力晨間" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3", title: "極限突破" }
+    ],
+    ambient: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3", title: "環境氛圍 1" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3", title: "自然之聲" }
+    ]
+  };
+
+  const tracks = musicMap[theme] || musicMap.focus;
+  return tracks[Math.floor(Math.random() * tracks.length)];
+}
 
 export interface AIJournalAnalysis {
   calendarEvents: {
@@ -108,17 +201,18 @@ export async function generateDailyAnalysis(logs: DailyLog, note: string): Promi
   }
 }
 
-export async function getFunFacts(): Promise<FunFact[]> {
+export async function getFunFacts(existingFacts: string[] = []): Promise<FunFact[]> {
   if (!process.env.GEMINI_API_KEY) return [];
 
   const prompt = `
     請提供 3 個有趣的小知識。
     主題可以是氣象、心理、生物、化學、天文、歷史等。
     每個知識點要有趣、令人驚訝，且簡短（50字以內）。
-    格式範例：
-    - "人類的小腸有 6 公尺長，大約是大腸長度的 4 倍。"
     
-    請回傳 3 個知識點。
+    目前已有的知識點（請不要重複）：
+    ${existingFacts.join('\n')}
+    
+    請回傳 3 個全新的知識點。
   `;
 
   try {

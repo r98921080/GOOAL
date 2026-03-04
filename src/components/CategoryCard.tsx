@@ -197,7 +197,19 @@ export const CategoryCard: React.FC<CategoryCardProps> = ({
                     {(['mini', 'advanced', 'elite'] as Level[]).map(level => (
                       <button
                         key={level}
-                        onClick={() => isEditable && setSelectedSub(sub)}
+                        onClick={() => {
+                          if (isEditable) {
+                            if (log?.achieved === level) {
+                              onResetLog(sub.id);
+                            } else {
+                              onLog(sub.id, level);
+                            }
+                          }
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          if (isEditable) setSelectedSub(sub);
+                        }}
                         disabled={!isEditable}
                         className={cn(
                           "py-2 px-1 rounded-xl text-[10px] font-bold uppercase transition-all",
