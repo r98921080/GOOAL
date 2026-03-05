@@ -32,6 +32,7 @@ export default function App() {
         },
         dailyNotes: parsed.dailyNotes || {},
         noteTitles: parsed.noteTitles || {},
+        userNoteTitles: parsed.userNoteTitles || {},
         rewards: parsed.rewards || { points: 0, unlockedItems: [], gardenProgress: 0 },
         dailyChallenges: parsed.dailyChallenges || {},
         funFacts: parsed.funFacts || {},
@@ -43,7 +44,7 @@ export default function App() {
         }
       };
     }
-    return { ...INITIAL_STATE, dailyNotes: {} };
+    return { ...INITIAL_STATE, dailyNotes: {}, userNoteTitles: {} };
   });
 
   const [isSetupOpen, setIsSetupOpen] = useState(false);
@@ -424,6 +425,16 @@ export default function App() {
       }));
     }
   };
+  
+  const handleUpdateUserNoteTitle = (date: string, title: string) => {
+    setState(prev => ({
+      ...prev,
+      userNoteTitles: {
+        ...(prev.userNoteTitles || {}),
+        [date]: title
+      }
+    }));
+  };
 
   const handleAddCategory = (custom?: Partial<Category>) => {
     const parsed = custom || (setupData.title ? setupData : parseNLPSetup(nlpInput));
@@ -511,6 +522,7 @@ export default function App() {
           <LogsView 
             state={state} 
             onUpdateNote={handleUpdateDailyNote}
+            onUpdateUserNoteTitle={handleUpdateUserNoteTitle}
             onAnalyzeJournal={handleAnalyzeJournal}
             onRemoveTodo={handleRemoveTodo}
             onCreateCalendarEvent={handleCreateCalendarEvent}

@@ -45,6 +45,7 @@ import {
 interface LogsViewProps {
   state: AppState;
   onUpdateNote: (date: string, note: string) => void;
+  onUpdateUserNoteTitle: (date: string, title: string) => void;
   onAnalyzeJournal: (date: string) => Promise<any[] | undefined>;
   onRemoveTodo: (id: string) => void;
   onCreateCalendarEvent: (event: any) => Promise<boolean>;
@@ -55,6 +56,7 @@ type LogTab = 'daily' | 'trends' | 'diary';
 export const LogsView: React.FC<LogsViewProps> = ({ 
   state, 
   onUpdateNote,
+  onUpdateUserNoteTitle,
   onAnalyzeJournal,
   onRemoveTodo,
   onCreateCalendarEvent
@@ -542,7 +544,8 @@ export const LogsView: React.FC<LogsViewProps> = ({
           <div className="relative space-y-4 pl-4 border-l-2 border-slate-100 ml-6">
             {diaryEntries.map(([date, note]) => {
               const isExpanded = expandedEntries.has(date);
-              const title = state.noteTitles?.[date];
+              const aiTitle = state.noteTitles?.[date];
+              const userTitle = state.userNoteTitles?.[date] || '';
               const parsedDate = parseISO(date);
 
               return (
@@ -561,37 +564,55 @@ export const LogsView: React.FC<LogsViewProps> = ({
 
                   <div 
                     className={cn(
-                      "bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-100 transition-all duration-300 cursor-pointer",
+                      "bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-100 transition-all duration-300",
                       isExpanded ? "p-6 ring-2 ring-emerald-500/10" : "p-4 hover:border-emerald-200"
                     )}
-                    onClick={() => toggleExpand(date)}
                   >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-4">
-                        <div className="flex flex-col">
-                          <div className="flex items-center gap-2">
+                    <div 
+                      className="flex justify-between items-center cursor-pointer"
+                      onClick={() => toggleExpand(date)}
+                    >
+                      <div className="flex items-center gap-4 flex-1 min-w-0">
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                               {format(parsedDate, 'yyyy.MM.dd')}
                             </span>
                             <span className="text-[10px] font-bold text-emerald-500/60 uppercase">
                               {format(parsedDate, 'EEE')}
                             </span>
+                            {aiTitle && (
+                              <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">
+                                AI: {aiTitle}
+                              </span>
+                            )}
+                            {userTitle && !isExpanded && (
+                              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase truncate max-w-[100px]">
+                                {userTitle}
+                              </span>
+                            )}
                           </div>
-                          <h4 className={cn(
-                            "font-black transition-all",
-                            isExpanded ? "text-lg text-emerald-600 mt-1" : "text-sm text-slate-700"
-                          )}>
-                            {title ? `「${title}」` : "今日紀錄"}
-                          </h4>
-                          {!isExpanded && (
-                            <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5 italic">
+                          
+                          {isExpanded ? (
+                            <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <Edit2 size={12} className="text-slate-300 shrink-0" />
+                              <input 
+                                type="text"
+                                value={userTitle}
+                                onChange={(e) => onUpdateUserNoteTitle(date, e.target.value)}
+                                placeholder="自行命名這一天..."
+                                className="flex-1 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 outline-none focus:border-emerald-300"
+                              />
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-slate-400 line-clamp-1 mt-1 italic">
                               {note}
                             </p>
                           )}
                         </div>
                       </div>
                       
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 shrink-0">
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();

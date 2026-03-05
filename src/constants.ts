@@ -54,6 +54,7 @@ export const INITIAL_STATE: AppState = {
   logs: {},
   dailyNotes: {},
   noteTitles: {},
+  userNoteTitles: {},
   rewards: {
     points: 0,
     unlockedItems: [],

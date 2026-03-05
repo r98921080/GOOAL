@@ -92,6 +92,9 @@ export interface AppState {
   noteTitles: {
     [date: string]: string;
   };
+  userNoteTitles: {
+    [date: string]: string;
+  };
   rewards: {
     points: number;
     unlockedItems: string[];
