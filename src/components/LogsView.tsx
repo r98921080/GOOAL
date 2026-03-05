@@ -583,17 +583,17 @@ export const LogsView: React.FC<LogsViewProps> = ({
                             </span>
                             {aiTitle && (
                               <span className="text-[10px] font-black text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">
-                                AI: {aiTitle}
+                                {aiTitle}
                               </span>
                             )}
-                            {userTitle && !isExpanded && (
-                              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase truncate max-w-[100px]">
+                            {userTitle && isExpanded && (
+                              <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase">
                                 {userTitle}
                               </span>
                             )}
                           </div>
                           
-                          {isExpanded ? (
+                          {isExpanded && (
                             <div className="mt-2 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                               <Edit2 size={12} className="text-slate-300 shrink-0" />
                               <input 
@@ -604,10 +604,6 @@ export const LogsView: React.FC<LogsViewProps> = ({
                                 className="flex-1 bg-slate-50 border border-slate-100 rounded-lg px-2 py-1 text-xs font-bold text-emerald-700 outline-none focus:border-emerald-300"
                               />
                             </div>
-                          ) : (
-                            <p className="text-[10px] text-slate-400 line-clamp-1 mt-1 italic">
-                              {note}
-                            </p>
                           )}
                         </div>
                       </div>

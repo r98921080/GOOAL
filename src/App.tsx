@@ -413,8 +413,8 @@ export default function App() {
       }
     }));
 
-    // Auto-generate title if it doesn't exist or if note is long enough
-    if (note.length > 10) {
+    // Auto-generate title every time it's saved if note is not empty
+    if (note.trim()) {
       const title = await generateNoteTitle(note);
       setState(prev => ({
         ...prev,

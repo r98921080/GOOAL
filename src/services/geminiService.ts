@@ -106,16 +106,20 @@ export async function pickMusic(theme: string): Promise<{ url: string; title: st
 }
 
 export async function generateNoteTitle(text: string): Promise<string> {
-  if (!process.env.GEMINI_API_KEY || !text.trim()) return "無標題日誌";
+  if (!process.env.GEMINI_API_KEY || !text.trim()) return "今日紀錄";
 
   const prompt = `
-    請根據以下日誌內容，生成一個極簡短、有記憶點的標題（5個字以內）。
-    標題應該能反映當天的核心情緒或事件。
+    請根據以下日誌內容，生成一個極具創意、幽默或富有詩意的標題（5個字以內）。
+    標題應該能深刻反映當天的情緒或獨特事件，避免平庸的描述。
+    例如：
+    - 如果內容關於快樂與收穫，可以是「快樂採菇人」
+    - 如果內容關於挫折，可以是「人生的低谷」
+    - 如果內容關於忙碌，可以是「旋轉的小陀螺」
     
     日誌內容：
     "${text}"
     
-    請直接回傳標題文字。
+    請直接回傳標題文字，不要有引號。
   `;
 
   try {
