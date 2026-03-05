@@ -514,19 +514,24 @@ export const LogsView: React.FC<LogsViewProps> = ({
           />
         </div>
 
-        <div className="flex justify-end gap-2">
-          <button 
-            onClick={expandAll}
-            className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 hover:text-emerald-500"
-          >
-            <Maximize2 size={12} /> 全部展開
-          </button>
-          <button 
-            onClick={collapseAll}
-            className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 hover:text-emerald-500"
-          >
-            <Minimize2 size={12} /> 全部收合
-          </button>
+        <div className="flex justify-between items-center px-2">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+            共 {diaryEntries.length} 篇紀錄
+          </h3>
+          <div className="flex gap-3">
+            <button 
+              onClick={expandAll}
+              className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 hover:text-emerald-500 transition-colors"
+            >
+              <Maximize2 size={12} /> 全部展開
+            </button>
+            <button 
+              onClick={collapseAll}
+              className="text-[10px] font-bold text-slate-400 uppercase flex items-center gap-1 hover:text-emerald-500 transition-colors"
+            >
+              <Minimize2 size={12} /> 全部收合
+            </button>
+          </div>
         </div>
 
         {diaryEntries.length === 0 ? (
@@ -534,62 +539,111 @@ export const LogsView: React.FC<LogsViewProps> = ({
             {searchQuery ? '找不到符合的日誌' : '尚未撰寫任何日記'}
           </div>
         ) : (
-          diaryEntries.map(([date, note]) => {
-            const isExpanded = expandedEntries.has(date);
-            const title = state.noteTitles?.[date];
+          <div className="relative space-y-4 pl-4 border-l-2 border-slate-100 ml-6">
+            {diaryEntries.map(([date, note]) => {
+              const isExpanded = expandedEntries.has(date);
+              const title = state.noteTitles?.[date];
+              const parsedDate = parseISO(date);
 
-            return (
-              <motion.div 
-                key={date}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100"
-              >
-                <div className="flex justify-between items-start mb-3">
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-xs font-black text-slate-800">{date}</span>
-                      <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">{format(parseISO(date), 'EEEE')}</span>
-                    </div>
-                    {title && (
-                      <h4 className="text-sm font-black text-emerald-600">「{title}」</h4>
+              return (
+                <motion.div 
+                  key={date}
+                  layout
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="relative"
+                >
+                  {/* Timeline Dot */}
+                  <div className={cn(
+                    "absolute -left-[25px] top-6 w-4 h-4 rounded-full border-4 border-white shadow-sm transition-colors duration-300",
+                    isExpanded ? "bg-emerald-500" : "bg-slate-200"
+                  )} />
+
+                  <div 
+                    className={cn(
+                      "bg-white rounded-[24px] overflow-hidden shadow-sm border border-slate-100 transition-all duration-300 cursor-pointer",
+                      isExpanded ? "p-6 ring-2 ring-emerald-500/10" : "p-4 hover:border-emerald-200"
                     )}
+                    onClick={() => toggleExpand(date)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                              {format(parsedDate, 'yyyy.MM.dd')}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-500/60 uppercase">
+                              {format(parsedDate, 'EEE')}
+                            </span>
+                          </div>
+                          <h4 className={cn(
+                            "font-black transition-all",
+                            isExpanded ? "text-lg text-emerald-600 mt-1" : "text-sm text-slate-700"
+                          )}>
+                            {title ? `「${title}」` : "今日紀錄"}
+                          </h4>
+                          {!isExpanded && (
+                            <p className="text-[10px] text-slate-400 line-clamp-1 mt-0.5 italic">
+                              {note}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDate(parsedDate);
+                            setActiveTab('daily');
+                          }}
+                          className="p-2 text-slate-300 hover:text-emerald-500 transition-colors"
+                          title="查看詳情"
+                        >
+                          <ChevronRight size={18} />
+                        </button>
+                        <div className="text-slate-300">
+                          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mt-4 pt-4 border-t border-slate-50"
+                        >
+                          <p className="text-sm text-slate-600 leading-relaxed italic whitespace-pre-line">
+                            "{note}"
+                          </p>
+                          
+                          <div className="flex justify-between items-center mt-6">
+                            <div className="flex gap-2">
+                              {state.logs[date] && Object.keys(state.logs[date]).length > 0 && (
+                                <span className="text-[10px] font-bold bg-emerald-50 text-emerald-600 px-2 py-1 rounded-full uppercase">
+                                  已打卡 {Object.keys(state.logs[date]).length} 個項目
+                                </span>
+                              )}
+                            </div>
+                            <button 
+                              onClick={() => toggleExpand(date)}
+                              className="text-[10px] font-bold text-slate-400 uppercase hover:text-slate-600 transition-colors"
+                            >
+                              收合內容
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
-                  <button 
-                    onClick={() => toggleExpand(date)}
-                    className="p-2 text-slate-300 hover:text-emerald-500"
-                  >
-                    {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                  </button>
-                </div>
-                
-                <div className={cn(
-                  "text-sm text-slate-600 leading-relaxed italic transition-all duration-300",
-                  !isExpanded && "line-clamp-2"
-                )}>
-                  "{note}"
-                </div>
-
-                <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-50">
-                  <button 
-                    onClick={() => {
-                      setSelectedDate(parseISO(date));
-                      setActiveTab('daily');
-                    }}
-                    className="text-[10px] font-bold text-emerald-500 uppercase flex items-center gap-1"
-                  >
-                    查看詳情 <ChevronRight size={10} />
-                  </button>
-                  <button 
-                    onClick={() => toggleExpand(date)}
-                    className="text-[10px] font-bold text-slate-400 uppercase"
-                  >
-                    {isExpanded ? '收合' : '展開閱讀'}
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })
+                </motion.div>
+              );
+            })}
+          </div>
         )}
       </div>
     );

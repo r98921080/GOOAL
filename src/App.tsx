@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { format, subDays, differenceInDays, startOfDay, isSameDay } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
-import { Trophy, Flame, Plus, Settings, Share2, Sparkles, ChevronLeft, X, Compass, BookOpen, LayoutDashboard, Cloud, Zap, Calendar as CalendarIcon, Flower2, Sprout, TreeDeciduous } from 'lucide-react';
+import { Trophy, Flame, Plus, Settings, Share2, Sparkles, ChevronLeft, X, Compass, BookOpen, LayoutDashboard, Cloud, Zap, Calendar as CalendarIcon, Flower2, Sprout, TreeDeciduous, Info } from 'lucide-react';
 import { Category, DailyLog, Level, AppState, DailyChallenge, SubItem, ExploreAnalysis, AppSettings } from './types';
 import { INITIAL_STATE, LEVEL_XP, THEME_COLORS } from './constants';
 import { CategoryCard } from './components/CategoryCard';
@@ -58,6 +58,7 @@ export default function App() {
   const [isGeneratingChallenges, setIsGeneratingChallenges] = useState(false);
   const [isGeneratingFunFacts, setIsGeneratingFunFacts] = useState(false);
   const [isLevelInfoOpen, setIsLevelInfoOpen] = useState(false);
+  const [isGardenInfoOpen, setIsGardenInfoOpen] = useState(false);
 
   const today = format(new Date(), 'yyyy-MM-dd');
   const currentDateStr = format(selectedDate, 'yyyy-MM-dd');
@@ -631,6 +632,12 @@ export default function App() {
                   <h2 className="font-black text-slate-800 text-sm flex items-center gap-2">
                     <Sprout size={18} className="text-emerald-500" />
                     成長花園
+                    <button 
+                      onClick={() => setIsGardenInfoOpen(true)}
+                      className="p-1 text-slate-300 hover:text-emerald-500 transition-colors"
+                    >
+                      <Info size={14} />
+                    </button>
                   </h2>
                   <div className="flex gap-2">
                     {state.profile.streak >= 3 && (
@@ -774,6 +781,82 @@ export default function App() {
       <main className="px-6">
         {renderContent()}
       </main>
+
+      {/* Garden Info Modal */}
+      <AnimatePresence>
+        {isGardenInfoOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-md bg-white rounded-[40px] p-8 shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                  <Sprout className="text-emerald-500" /> 成長花園玩法
+                </h2>
+                <button onClick={() => setIsGardenInfoOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400">
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-6 text-slate-600">
+                <div className="bg-emerald-50 p-4 rounded-2xl">
+                  <h3 className="font-bold text-emerald-800 mb-2 flex items-center gap-2">
+                    <Cloud size={16} /> 灌溉機制
+                  </h3>
+                  <p className="text-sm leading-relaxed">
+                    每一次習慣打卡都是在為花園「灌溉」。XP 越高，灌溉的養分就越充足。
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-orange-50 p-4 rounded-2xl">
+                    <h3 className="font-bold text-orange-800 mb-2 flex items-center gap-2 text-xs">
+                      <Flame size={14} /> 狂熱加成
+                    </h3>
+                    <p className="text-[10px] leading-relaxed text-orange-700">
+                      連續打卡 3 天以上，灌溉效率提升 20%！
+                    </p>
+                  </div>
+                  <div className="bg-indigo-50 p-4 rounded-2xl">
+                    <h3 className="font-bold text-indigo-800 mb-2 flex items-center gap-2 text-xs">
+                      <Sparkles size={14} /> 繁花盛開
+                    </h3>
+                    <p className="text-[10px] leading-relaxed text-indigo-700">
+                      連續打卡 7 天，花園將會出現閃爍特效。
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                    <Trophy size={16} className="text-amber-500" /> 收成獎勵
+                  </h3>
+                  <ul className="text-xs space-y-2">
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      進度達 100% 時，自動收成並重置。
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      每次收成可獲得 <span className="font-black text-emerald-600">500 積分</span>。
+                    </li>
+                  </ul>
+                </div>
+
+                <button 
+                  onClick={() => setIsGardenInfoOpen(false)}
+                  className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all"
+                >
+                  我知道了
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Level Info Modal */}
       <AnimatePresence>

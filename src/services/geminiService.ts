@@ -22,7 +22,6 @@ export async function performDeepLifeAnalysis(state: AppState): Promise<ExploreA
     - 類別：${JSON.stringify(state.categories.map(c => c.title))}
     - 最近紀錄：${JSON.stringify(state.logs)}
     - 最近日誌：${JSON.stringify(state.dailyNotes)}
-    - 成就：${JSON.stringify(state.profile.achievements)}
     
     請分析：
     1. 使用者的情緒與心理狀態（察覺潛在壓力或動力）。
@@ -70,35 +69,35 @@ export async function performDeepLifeAnalysis(state: AppState): Promise<ExploreA
   }
 }
 
-export async function pickMusic(theme: string): Promise<{ url: string; title: string }> {
-  const musicMap: Record<string, { url: string; title: string }[]> = {
+export async function pickMusic(theme: string): Promise<{ url: string; title: string; description: string }> {
+  const musicMap: Record<string, { url: string; title: string; description: string }[]> = {
     focus: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title: "專注冥想曲 1" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title: "深層工作流" }
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title: "深層專注鋼琴", description: "純淨鋼琴旋律，助你進入心流狀態" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title: "小提琴思緒流", description: "優雅的小提琴，適合深度思考與工作" }
     ],
     relax: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", title: "午後寧靜" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", title: "星空下的放鬆" }
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", title: "薩克斯風午茶", description: "慵懶的薩克斯風，放鬆緊繃的神經" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", title: "古典弦樂之夜", description: "豐富的弦樂重奏，帶來寧靜的夜晚" }
     ],
     energy: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3", title: "活力晨間" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3", title: "極限突破" }
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3", title: "活力交響晨曦", description: "輕快的管弦樂，開啟充滿活力的一天" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3", title: "爵士薩克斯風", description: "節奏感強烈的爵士樂，激發行動力" }
     ],
     ambient: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3", title: "環境氛圍 1" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3", title: "自然之聲" }
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3", title: "森林鋼琴迴響", description: "鋼琴與自然環境音的完美融合" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3", title: "雨天小提琴", description: "憂鬱而優美的小提琴，適合雨天沉思" }
     ],
     nature: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3", title: "森林晨曦" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3", title: "溪流潺潺" }
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3", title: "溪流與長笛", description: "清脆的長笛聲，伴隨潺潺流水" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3", title: "鳥鳴鋼琴曲", description: "清晨鳥鳴與輕柔鋼琴的對話" }
     ],
     classical: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3", title: "巴哈：G弦上的詠嘆調" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3", title: "蕭邦：夜曲" }
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3", title: "巴哈：G弦上的詠嘆調", description: "經典小提琴名曲，平復心靈" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3", title: "蕭邦：夜曲", description: "細膩的鋼琴獨奏，感受浪漫氛圍" }
     ],
     lofi: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3", title: "雨夜咖啡廳" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3", title: "復古節拍" }
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3", title: "復古鋼琴 Lofi", description: "溫暖的鋼琴採樣，陪伴你的學習時光" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3", title: "薩克斯風節拍", description: "爵士元素與現代節拍的碰撞" }
     ]
   };
 
