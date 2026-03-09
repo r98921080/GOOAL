@@ -71,37 +71,25 @@ export async function performDeepLifeAnalysis(state: AppState): Promise<ExploreA
 
 export async function pickMusic(theme: string): Promise<{ url: string; title: string; description: string }> {
   const musicMap: Record<string, { url: string; title: string; description: string }[]> = {
-    focus: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title: "深層專注鋼琴", description: "純淨鋼琴旋律，助你進入心流狀態" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title: "小提琴思緒流", description: "優雅的小提琴，適合深度思考與工作" }
+    naoko: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3", title: "具島直子：Candy", description: "City Pop 風格，輕快而優雅的都市律動" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3", title: "具島直子：Tell me oh mama", description: "溫柔的嗓音，伴隨爵士感的編曲" }
     ],
-    relax: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", title: "薩克斯風午茶", description: "慵懶的薩克斯風，放鬆緊繃的神經" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", title: "古典弦樂之夜", description: "豐富的弦樂重奏，帶來寧靜的夜晚" }
+    norah: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3", title: "Norah Jones: Don't Know Why", description: "溫暖的鋼琴與爵士女伶，適合午後放鬆" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-4.mp3", title: "Norah Jones: Come Away With Me", description: "簡約而深情的民謠爵士" }
     ],
-    energy: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3", title: "活力交響晨曦", description: "輕快的管弦樂，開啟充滿活力的一天" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3", title: "爵士薩克斯風", description: "節奏感強烈的爵士樂，激發行動力" }
+    damien: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-8.mp3", title: "Damien Rice: The Blower's Daughter", description: "憂鬱而強烈的大提琴與吉他，觸動靈魂" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-9.mp3", title: "Damien Rice: Cannonball", description: "純粹的民謠力量，適合深夜沉思" }
     ],
-    ambient: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3", title: "森林鋼琴迴響", description: "鋼琴與自然環境音的完美融合" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3", title: "雨天小提琴", description: "憂鬱而優美的小提琴，適合雨天沉思" }
-    ],
-    nature: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-13.mp3", title: "溪流與長笛", description: "清脆的長笛聲，伴隨潺潺流水" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-14.mp3", title: "鳥鳴鋼琴曲", description: "清晨鳥鳴與輕柔鋼琴的對話" }
-    ],
-    classical: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-15.mp3", title: "巴哈：G弦上的詠嘆調", description: "經典小提琴名曲，平復心靈" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-16.mp3", title: "蕭邦：夜曲", description: "細膩的鋼琴獨奏，感受浪漫氛圍" }
-    ],
-    lofi: [
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3", title: "復古鋼琴 Lofi", description: "溫暖的鋼琴採樣，陪伴你的學習時光" },
-      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-7.mp3", title: "薩克斯風節拍", description: "爵士元素與現代節拍的碰撞" }
+    nightwish: [
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-10.mp3", title: "Nightwish: Nemo", description: "交響金屬的宏偉氣勢，充滿戲劇張力" },
+      { url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-11.mp3", title: "Nightwish: Sleeping Sun", description: "空靈的女高音與史詩般的旋律" }
     ]
   };
 
-  const tracks = musicMap[theme] || musicMap.focus;
+  const tracks = musicMap[theme] || musicMap.naoko;
   return tracks[Math.floor(Math.random() * tracks.length)];
 }
 
@@ -433,6 +421,37 @@ export async function getSubItemGoals(categoryTitle: string, subItemName: string
     return { mini: '低保', advanced: '進階', elite: '菁英' };
   }
 }
+export async function prioritizeTodos(todos: TodoItem[]): Promise<string[]> {
+  if (!process.env.GEMINI_API_KEY || todos.length === 0) return [];
+
+  const prompt = `
+    你是一位高效能專家。請根據以下待辦事項清單，評估並選出最優先完成的 5 個事項。
+    
+    待辦事項：
+    ${todos.map(t => `- [${t.id}] ${t.text}`).join('\n')}
+    
+    請回傳這 5 個事項的 ID，以 JSON 陣列格式回傳。
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
+      }
+    });
+    return JSON.parse(response.text || "[]");
+  } catch (error) {
+    console.error("Prioritize Todos Error:", error);
+    return [];
+  }
+}
+
 export function parseNLPSetup(input: string): Partial<Category> | null {
   // Simple regex-based parser for "Category: item1, item2, item3"
   const match = input.match(/^(.+?)[:：]\s*(.+?)[,，]\s*(.+?)[,，]\s*(.+)$/);

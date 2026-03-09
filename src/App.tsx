@@ -10,7 +10,7 @@ import { ExploreView } from './components/ExploreView';
 import { SettingsView } from './components/SettingsView';
 import { CalendarView } from './components/CalendarView';
 import { MusicPlayer } from './components/MusicPlayer';
-import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts, analyzeJournal, generateDailyAnalysis, pickMusic, generateNoteTitle } from './services/geminiService';
+import { generateWeeklySummary, parseNLPSetup, getDailyChallenges, getSubItemSuggestions, getSubItemGoals, getFunFacts, analyzeJournal, generateDailyAnalysis, pickMusic, generateNoteTitle, prioritizeTodos } from './services/geminiService';
 import { cn } from './lib/utils';
 
 type Tab = 'dashboard' | 'explore' | 'logs' | 'settings';
@@ -33,7 +33,10 @@ export default function App() {
         dailyNotes: parsed.dailyNotes || {},
         noteTitles: parsed.noteTitles || {},
         userNoteTitles: parsed.userNoteTitles || {},
-        rewards: parsed.rewards || { points: 0, unlockedItems: [], gardenProgress: 0 },
+        rewards: {
+          ...INITIAL_STATE.rewards,
+          ...parsed.rewards
+        },
         dailyChallenges: parsed.dailyChallenges || {},
         funFacts: parsed.funFacts || {},
         todos: parsed.todos || [],
@@ -235,11 +238,20 @@ export default function App() {
     });
   };
 
-  const handleRemoveTodo = (todoId: string) => {
+  const handleRemoveTodo = async (todoId: string) => {
+    const newTodos = state.todos.filter(t => t.id !== todoId);
     setState(prev => ({
       ...prev,
-      todos: prev.todos.filter(t => t.id !== todoId)
+      todos: newTodos
     }));
+    
+    // Re-prioritize after removal
+    if (newTodos.length > 0) {
+      const priorityIds = await prioritizeTodos(newTodos);
+      setState(prev => ({ ...prev, priorityTodoIds: priorityIds }));
+    } else {
+      setState(prev => ({ ...prev, priorityTodoIds: [] }));
+    }
   };
 
   const handleAnalyzeJournal = async (date: string) => {
@@ -254,10 +266,16 @@ export default function App() {
         id: `todo_${Math.random().toString(36).substr(2, 9)}`,
         text
       }));
+      
+      const allTodos = [...state.todos, ...newTodos];
       setState(prev => ({
         ...prev,
-        todos: [...prev.todos, ...newTodos]
+        todos: allTodos
       }));
+
+      // Prioritize
+      const priorityIds = await prioritizeTodos(allTodos);
+      setState(prev => ({ ...prev, priorityTodoIds: priorityIds }));
     }
 
     return analysis.calendarEvents;
@@ -637,20 +655,23 @@ export default function App() {
               </AnimatePresence>
             </section>
 
-            {/* Garden Section - Moved to bottom */}
+            {/* Garden Section - Redesigned */}
             <section className="bg-white/40 backdrop-blur-sm rounded-[40px] p-6 border border-white/20 shadow-xl overflow-hidden relative mb-12">
               <div className="relative z-10">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="font-black text-slate-800 text-sm flex items-center gap-2">
-                    <Sprout size={18} className="text-emerald-500" />
-                    成長花園
-                    <button 
-                      onClick={() => setIsGardenInfoOpen(true)}
-                      className="p-1 text-slate-300 hover:text-emerald-500 transition-colors"
-                    >
-                      <Info size={14} />
-                    </button>
-                  </h2>
+                  <div className="flex flex-col">
+                    <h2 className="font-black text-slate-800 text-sm flex items-center gap-2">
+                      <Flower2 size={18} className="text-emerald-500" />
+                      奇幻成長花園
+                      <button 
+                        onClick={() => setIsGardenInfoOpen(true)}
+                        className="p-1 text-slate-300 hover:text-emerald-500 transition-colors"
+                      >
+                        <Info size={14} />
+                      </button>
+                    </h2>
+                    <span className="text-[10px] font-bold text-slate-400">LV.{state.rewards.gardenLevel} 級別花園</span>
+                  </div>
                   <div className="flex gap-2">
                     {state.profile.streak >= 3 && (
                       <span className="text-[10px] font-black text-orange-600 bg-orange-100 px-2 py-1 rounded-full uppercase flex items-center gap-1">
@@ -658,73 +679,78 @@ export default function App() {
                       </span>
                     )}
                     <span className="text-[10px] font-black text-emerald-600 bg-emerald-100 px-2 py-1 rounded-full uppercase">
-                      {state.rewards.gardenProgress < 30 ? '發芽中' : state.rewards.gardenProgress < 70 ? '茁壯中' : '繁花盛開'}
+                      {state.rewards.gardenProgress < 20 ? '種子期' : state.rewards.gardenProgress < 50 ? '幼苗期' : state.rewards.gardenProgress < 80 ? '成長期' : '開花期'}
                     </span>
                   </div>
                 </div>
                 
-                <div className="flex items-end justify-around h-24 mb-4">
-                  <motion.div 
-                    animate={{ 
-                      scale: state.rewards.gardenProgress > 10 ? 1 : 0,
-                      rotate: state.rewards.gardenProgress > 10 ? [0, 5, -5, 0] : 0
-                    }}
-                    transition={{ repeat: Infinity, duration: 5 }}
-                    className="text-emerald-400"
-                  >
-                    <Sprout size={24} />
-                  </motion.div>
-                  <motion.div 
-                    animate={{ 
-                      scale: state.rewards.gardenProgress > 40 ? 1.2 : 0,
-                      y: state.rewards.gardenProgress > 40 ? [0, -5, 0] : 0
-                    }}
-                    transition={{ repeat: Infinity, duration: 3 }}
-                    className="text-teal-500"
-                  >
-                    <TreeDeciduous size={32} />
-                  </motion.div>
-                  <motion.div 
-                    animate={{ 
-                      scale: state.rewards.gardenProgress > 80 ? 1.5 : 0,
-                      rotate: state.rewards.gardenProgress > 80 ? [0, 10, -10, 0] : 0,
-                      filter: state.rewards.gardenProgress > 80 ? 'drop-shadow(0 0 8px rgba(236, 72, 153, 0.4))' : 'none'
-                    }}
-                    transition={{ repeat: Infinity, duration: 4 }}
-                    className="text-pink-500"
-                  >
-                    <Flower2 size={40} />
-                  </motion.div>
+                {/* Garden Visualizer */}
+                <div className="grid grid-cols-4 gap-4 h-32 mb-6 items-end justify-items-center">
+                  {[...Array(4)].map((_, i) => {
+                    const isActive = state.rewards.gardenProgress > (i * 25);
+                    const isFullyGrown = state.rewards.gardenProgress > ((i + 1) * 25);
+                    return (
+                      <motion.div 
+                        key={i}
+                        initial={{ scale: 0 }}
+                        animate={{ 
+                          scale: isActive ? (isFullyGrown ? 1.2 : 0.8) : 0.2,
+                          y: isActive ? [0, -5, 0] : 0,
+                          opacity: isActive ? 1 : 0.3
+                        }}
+                        transition={{ repeat: Infinity, duration: 3 + i, delay: i * 0.5 }}
+                        className={cn(
+                          "transition-all duration-500",
+                          isFullyGrown ? "text-pink-500" : isActive ? "text-emerald-400" : "text-slate-200"
+                        )}
+                      >
+                        {isFullyGrown ? <Flower2 size={32 + i * 4} /> : isActive ? <Sprout size={24} /> : <Cloud size={16} />}
+                      </motion.div>
+                    );
+                  })}
                 </div>
 
-                <div className="w-full h-2 bg-slate-200/50 rounded-full overflow-hidden">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${state.rewards.gardenProgress}%` }}
-                    className="h-full bg-gradient-to-r from-emerald-400 to-teal-500"
-                  />
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <span>灌溉進度</span>
+                    <span>{state.rewards.gardenProgress}%</span>
+                  </div>
+                  <div className="w-full h-3 bg-slate-200/50 rounded-full overflow-hidden p-0.5 border border-white/50 shadow-inner">
+                    <motion.div 
+                      initial={{ width: 0 }}
+                      animate={{ width: `${state.rewards.gardenProgress}%` }}
+                      className="h-full bg-gradient-to-r from-emerald-400 via-teal-500 to-indigo-500 rounded-full shadow-lg"
+                    />
+                  </div>
                 </div>
-                <div className="flex justify-between items-center mt-2">
-                  <p className="text-[10px] text-slate-500 font-bold">
-                    打卡灌溉進度 {state.rewards.gardenProgress}%
-                  </p>
+                
+                <div className="flex justify-between items-center mt-4">
+                  <div className="flex -space-x-2">
+                    {state.rewards.gardenHistory?.slice(-5).map((item, i) => (
+                      <div key={i} className="w-6 h-6 rounded-full bg-white border-2 border-emerald-100 flex items-center justify-center text-[10px] shadow-sm">
+                        {item === 'harvest' ? '🌸' : '💧'}
+                      </div>
+                    ))}
+                  </div>
                   <p className="text-[10px] text-slate-400 font-bold italic">
-                    滿 100% 可獲得 500 點獎勵
+                    滿 100% 自動升級並獲得 500 點
                   </p>
                 </div>
               </div>
               <div className="absolute -right-10 -bottom-10 w-40 h-40 bg-emerald-500/10 blur-3xl rounded-full" />
+              <div className="absolute -left-10 -top-10 w-40 h-40 bg-indigo-500/5 blur-3xl rounded-full" />
+              
               {state.profile.streak >= 7 && (
                 <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
-                  {[...Array(5)].map((_, i) => (
+                  {[...Array(8)].map((_, i) => (
                     <motion.div
                       key={i}
                       initial={{ y: -20, x: Math.random() * 300, opacity: 0 }}
                       animate={{ y: 300, opacity: [0, 1, 0] }}
-                      transition={{ duration: 3, repeat: Infinity, delay: i * 0.8 }}
-                      className="absolute text-yellow-400/20"
+                      transition={{ duration: 4, repeat: Infinity, delay: i * 0.5 }}
+                      className="absolute text-yellow-400/30"
                     >
-                      <Sparkles size={12} />
+                      <Sparkles size={10} />
                     </motion.div>
                   ))}
                 </div>
@@ -806,7 +832,7 @@ export default function App() {
             >
               <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-                  <Sprout className="text-emerald-500" /> 成長花園玩法
+                  <Flower2 className="text-emerald-500" /> 奇幻成長花園玩法
                 </h2>
                 <button onClick={() => setIsGardenInfoOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-400">
                   <X size={20} />
@@ -816,10 +842,10 @@ export default function App() {
               <div className="space-y-6 text-slate-600">
                 <div className="bg-emerald-50 p-4 rounded-2xl">
                   <h3 className="font-bold text-emerald-800 mb-2 flex items-center gap-2">
-                    <Cloud size={16} /> 灌溉機制
+                    <Cloud size={16} /> 灌溉與成長
                   </h3>
                   <p className="text-sm leading-relaxed">
-                    每一次習慣打卡都是在為花園「灌溉」。XP 越高，灌溉的養分就越充足。
+                    每一次習慣打卡都是在為花園「灌溉」。XP 越高，灌溉的養分就越充足。花園會經歷<span className="font-bold">種子、幼苗、成長與開花</span>四個階段。
                   </p>
                 </div>
 
@@ -829,7 +855,7 @@ export default function App() {
                       <Flame size={14} /> 狂熱加成
                     </h3>
                     <p className="text-[10px] leading-relaxed text-orange-700">
-                      連續打卡 3 天以上，灌溉效率提升 20%！
+                      連續打卡 3 天以上，灌溉效率提升 20%！這會讓您的植物成長得更快。
                     </p>
                   </div>
                   <div className="bg-indigo-50 p-4 rounded-2xl">
@@ -837,30 +863,34 @@ export default function App() {
                       <Sparkles size={14} /> 繁花盛開
                     </h3>
                     <p className="text-[10px] leading-relaxed text-indigo-700">
-                      連續打卡 7 天，花園將會出現閃爍特效。
+                      連續打卡 7 天，花園將會出現閃爍特效，象徵您的毅力與榮耀。
                     </p>
                   </div>
                 </div>
 
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                   <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
-                    <Trophy size={16} className="text-amber-500" /> 收成獎勵
+                    <Trophy size={16} className="text-amber-500" /> 升級與獎勵
                   </h3>
                   <ul className="text-xs space-y-2">
                     <li className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      進度達 100% 時，自動收成並重置。
+                      進度達 100% 時，花園會自動升級並重置。
                     </li>
                     <li className="flex items-center gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                      每次收成可獲得 <span className="font-black text-emerald-600">500 積分</span>。
+                      每次升級可獲得 <span className="font-black text-emerald-600">500 積分</span>。
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      等級越高，花園的視覺效果會越華麗！
                     </li>
                   </ul>
                 </div>
 
                 <button 
                   onClick={() => setIsGardenInfoOpen(false)}
-                  className="w-full py-4 bg-emerald-600 text-white rounded-2xl font-bold shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all"
+                  className="w-full py-4 bg-slate-900 text-white rounded-2xl font-bold shadow-lg hover:bg-slate-800 transition-all"
                 >
                   我知道了
                 </button>

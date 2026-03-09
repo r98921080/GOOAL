@@ -102,13 +102,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
                   onChange={(e) => onUpdateSettings({ musicTheme: e.target.value as any })}
                   className="text-xs font-bold bg-slate-50 border-none rounded-lg p-2 outline-none"
                 >
-                  <option value="focus">專注 (Focus)</option>
-                  <option value="relax">放鬆 (Relax)</option>
-                  <option value="energy">活力 (Energy)</option>
-                  <option value="ambient">氛圍 (Ambient)</option>
-                  <option value="nature">自然 (Nature)</option>
-                  <option value="classical">古典 (Classical)</option>
-                  <option value="lofi">Lo-fi (Lofi)</option>
+                  <option value="naoko">具島直子 ( Naoko Gushima )</option>
+                  <option value="norah">Norah Jones</option>
+                  <option value="damien">Damien Rice</option>
+                  <option value="nightwish">Nightwish</option>
                 </select>
               </div>
               <button 

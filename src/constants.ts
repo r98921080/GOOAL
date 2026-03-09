@@ -65,10 +65,11 @@ export const INITIAL_STATE: AppState = {
   dailyChallenges: {},
   funFacts: {},
   todos: [],
+  priorityTodoIds: [],
   dailyAnalyses: {},
   settings: {
     musicEnabled: false,
-    musicTheme: 'focus',
+    musicTheme: 'naoko',
     notificationsEnabled: true,
     privacyMode: false,
     lastMusicUpdate: new Date(0).toISOString(),

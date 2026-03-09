@@ -72,7 +72,7 @@ export interface ExploreAnalysis {
 
 export interface AppSettings {
   musicEnabled: boolean;
-  musicTheme: 'focus' | 'relax' | 'energy' | 'ambient' | 'nature' | 'classical' | 'lofi';
+  musicTheme: 'naoko' | 'norah' | 'damien' | 'nightwish';
   notificationsEnabled: boolean;
   privacyMode: boolean;
   lastMusicUpdate: string;
@@ -109,6 +109,7 @@ export interface AppState {
     [date: string]: FunFact[];
   };
   todos: TodoItem[];
+  priorityTodoIds: string[];
   dailyAnalyses: {
     [date: string]: DailyAnalysis;
   };

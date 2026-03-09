@@ -174,7 +174,7 @@ export const LogsView: React.FC<LogsViewProps> = ({
           <textarea
             value={tempNote}
             onChange={(e) => setTempNote(e.target.value)}
-            className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none focus:border-emerald-500 h-32 resize-none"
+            className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl text-sm outline-none focus:border-emerald-500 h-32 resize-none text-slate-900"
             placeholder="寫下今天的感觸..."
           />
         ) : (
@@ -220,20 +220,31 @@ export const LogsView: React.FC<LogsViewProps> = ({
             待辦事項
           </h3>
           <div className="flex flex-wrap gap-2">
-            {state.todos.map(todo => (
-              <div 
-                key={todo.id} 
-                className="flex items-center gap-2 bg-slate-50 border border-slate-100 px-3 py-1.5 rounded-full"
-              >
-                <button 
-                  onClick={() => onRemoveTodo(todo.id)}
-                  className="text-slate-300 hover:text-red-500 transition-colors"
+            {state.todos.map(todo => {
+              const isPriority = state.priorityTodoIds?.includes(todo.id);
+              return (
+                <div 
+                  key={todo.id} 
+                  className={cn(
+                    "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all",
+                    isPriority ? "bg-indigo-100 border-indigo-200 border-2" : "bg-slate-50 border border-slate-100"
+                  )}
                 >
-                  <X size={14} />
-                </button>
-                <span className="text-xs font-bold text-slate-600">{todo.text}</span>
-              </div>
-            ))}
+                  <button 
+                    onClick={() => onRemoveTodo(todo.id)}
+                    className="text-slate-300 hover:text-red-500 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                  <span className={cn(
+                    "text-xs text-slate-600",
+                    isPriority ? "font-black text-indigo-700" : "font-bold"
+                  )}>
+                    {todo.text}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -746,7 +757,7 @@ export const LogsView: React.FC<LogsViewProps> = ({
                       <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">開始時間</label>
                       <input 
                         type="datetime-local" 
-                        value={suggestedEvents[currentEventIndex].start.slice(0, 16)}
+                        value={suggestedEvents[currentEventIndex]?.start?.slice(0, 16) || ''}
                         onChange={(e) => {
                           const newEvents = [...suggestedEvents];
                           newEvents[currentEventIndex].start = e.target.value;
@@ -759,7 +770,7 @@ export const LogsView: React.FC<LogsViewProps> = ({
                       <label className="text-[10px] font-black uppercase text-slate-400 mb-1 block">結束時間</label>
                       <input 
                         type="datetime-local" 
-                        value={suggestedEvents[currentEventIndex].end.slice(0, 16)}
+                        value={suggestedEvents[currentEventIndex]?.end?.slice(0, 16) || ''}
                         onChange={(e) => {
                           const newEvents = [...suggestedEvents];
                           newEvents[currentEventIndex].end = e.target.value;
